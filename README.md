@@ -61,3 +61,13 @@ npm run build
 Tests use literal contract fixtures and isolated local HTTP resources. They do not connect to live vaults or require real Clerk credentials. [Verification notes](docs/verification.md) record what was exercised and what remains unverified. [Architecture](docs/architecture-proposal.md) records the design and named review requirements.
 
 Live Clerk sign-in, a configured real vault connection, Freddie's desktop/mobile/accessibility assessment and Chris's explicit security approval remain outstanding. Code review and fixture testing do not substitute for those approvals.
+
+## APP-50 Azure-style workspaces — 0.1.3 (2026-11-01)
+
+Two additional navigation entries, **Keys (Azure-style)** and **Secrets (Azure-style)**, use the same connection, namespace and stored resources as Keys, Secrets and Advanced. Existing sections remain available. Lists search by name prefix and support pagination; callers without list permission can open a known name. Returning between workspaces loads fresh metadata.
+
+Secrets offers Generate/Import, manual creation or one nonempty UTF-8 text file up to 25 KiB, metadata-only version history, New version and Edit metadata. Files retain BOMs and newlines exactly and are sent only on explicit creation. Values stay masked and are never persisted to browser storage. History marks the newest created version as current even when disabled or expired; no older active version is substituted automatically. Metadata editing refreshes the exact selected version and never reads its value. Concurrent metadata saves can overwrite each other because the API has no optimistic-concurrency contract.
+
+Dates use explicit UTC controls. Existing activation/expiry dates can be changed but cannot be cleared with the current API. Use New version to change a value; historical values are never rewritten. Key generation offers RSA 2048/3072 with encrypt/decrypt permissions only. Private key material is not exportable through this API; this does not imply hardware-backed key storage. New key versions do not migrate existing ciphertext.
+
+Dirty input requires Stay/Discard before leaving. A failed request retains the form in memory; success clears the sensitive form and refreshes resource metadata. An ambiguous write failure must be checked with Refresh/version history before another deliberate submission; writes are never automatically retried. “Saved to vault” does not mean running consumers have refreshed. Bulk/snapshot restore, backup, certificates, EC keys, new delete controls and runtime propagation remain outside APP-50.

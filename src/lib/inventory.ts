@@ -9,6 +9,8 @@ export interface InventoryRow {
   version: string;
   enabled: boolean;
   expires?: number;
+  activation?: number;
+  updated?: number;
   purpose?: string;
   tags?: Record<string, string>;
   contentType?: string;
@@ -189,6 +191,14 @@ export function parseInventory(
       version,
       enabled: attributes.enabled,
       ...(expires !== undefined ? { expires: expires as number } : {}),
+      ...(Number.isSafeInteger(attributes.nbf) &&
+      (attributes.nbf as number) >= 0
+        ? { activation: attributes.nbf as number }
+        : {}),
+      ...(Number.isSafeInteger(attributes.updated) &&
+      (attributes.updated as number) >= 0
+        ? { updated: attributes.updated as number }
+        : {}),
       ...(purpose !== undefined ? { purpose } : {}),
       ...(tags ? { tags } : {}),
       ...(typeof item.contentType === "string"

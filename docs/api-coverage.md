@@ -45,3 +45,9 @@ Use isolated fixtures and a mock upstream; never production secrets. Exercise mi
 ## Concurrent inventory contract update
 
 Rechecked API src/app.ts, src/inventory.ts, src/config.ts, Swagger and test/inventory.spec.ts on 2026-11-01 after the user reported concurrent inventory work. The API inventory suite passed all 5 tests with disposable local MongoDB resources. UI integration targets that working-tree contract; no claim is made about a deployed API version.
+
+## APP-50 additive sections (2026-11-01)
+
+No API routes, proxy allowlists, stores or authentication contracts were added. Azure-style lists use GET /local/inventory with kind/namePrefix and validated scoped continuation paths. History and metadata editing use GET /{kind}/{name}/versions; latest is the last version returned. Edit metadata refetches history, then PATCHes /secrets/{name}/{exactVersion} without a GET of the value. Manual/file import and New version both use PUT /secrets/{name}; key generation uses POST /keys/{name}/create. Secret PUT response values are discarded rather than put into visible result state. Existing fallback operations remain intact.
+
+New automated coverage: test/azure-vault.test.ts and test/azure-console.test.tsx. These cover strict file decoding/limits, exact UTC validation, metadata projection, foreign identifiers, additive navigation, version history, secret creation/import/new-version/PATCH, supported key payloads, dirty-input and keyboard dialog behavior, ambiguous writes, duplicate-submit lock, independent list grants and late-response rejection. No live vault was used.

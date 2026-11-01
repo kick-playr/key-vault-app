@@ -16,6 +16,8 @@ import {
   type Section,
 } from "../lib/operations";
 import { OperationForm } from "./operation-form";
+import { DiscardDialog } from "./discard-dialog";
+import { AzureVaultPanel } from "./azure-vault-panel";
 import { InventoryPanel } from "./inventory-panel";
 import type { InventoryRow } from "../lib/inventory";
 const environments = [
@@ -41,6 +43,13 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
   const [connecting, setConnecting] = useState(false);
   const [connection, setConnection] = useState<Connection | null>(null);
   const [section, setSection] = useState<Section>("keys");
+  const [azureKind, setAzureKind] = useState<"keys" | "secrets" | null>(null);
+  const [pendingNavigation, setPendingNavigation] = useState<() => void>();
+  const dirtyInput = useRef(false);
+  function guarded(action: () => void) {
+    if (dirtyInput.current) setPendingNavigation(() => action);
+    else action();
+  }
   const [operationId, setOperationId] = useState("key-read");
   const [lastReconcile, setLastReconcile] = useState<Fields | null>(null);
   const [pendingVersion, setPendingVersion] = useState("");
@@ -70,6 +79,8 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
     if (resetForm) setFormEpoch((v) => v + 1);
   }
   function disconnect() {
+    dirtyInput.current = false;
+    setPendingNavigation(undefined);
     clearOperation();
     setConnection(null);
     setSelectedName("");
@@ -94,7 +105,9 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
     window.addEventListener("pagehide", clear);
     return () => window.removeEventListener("pagehide", clear);
   }, []);
-  function navigate(next: Section) {
+  function navigate(next: Section, azure = false) {
+    dirtyInput.current = false;
+    setAzureKind(azure && next !== "advanced" ? next : null);
     clearOperation();
     setSection(next);
     setSelectedName("");
@@ -226,6 +239,7 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
       setResult(data as Record<string, unknown>);
       setMessage("Operation completed.");
       if (operationRequest.method !== "GET") setInventoryRevision((v) => v + 1);
+      dirtyInput.current = false;
       if (section !== "advanced") {
         setSelectedName(fields.name ?? "");
       }
@@ -263,13 +277,39 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
               { id: "keys", label: "Keys", Icon: KeyIcon },
               { id: "secrets", label: "Secrets", Icon: LockClosedIcon },
               { id: "advanced", label: "Advanced", Icon: CommandLineIcon },
+              { id: "keys-azure", label: "Keys (Azure-style)", Icon: KeyIcon },
+              {
+                id: "secrets-azure",
+                label: "Secrets (Azure-style)",
+                Icon: LockClosedIcon,
+              },
             ] as const
           ).map(({ id, label, Icon }) => (
             <button
               key={id}
-              className={"nav-item " + (section === id ? "active" : "")}
-              aria-current={section === id ? "page" : undefined}
-              onClick={() => navigate(id)}
+              className={
+                "nav-item " +
+                ((azureKind ? `${azureKind}-azure` === id : section === id)
+                  ? "active"
+                  : "")
+              }
+              aria-current={
+                (azureKind ? `${azureKind}-azure` === id : section === id)
+                  ? "page"
+                  : undefined
+              }
+              onClick={() =>
+                guarded(() =>
+                  navigate(
+                    id === "keys-azure"
+                      ? "keys"
+                      : id === "secrets-azure"
+                        ? "secrets"
+                        : id,
+                    id.endsWith("-azure"),
+                  ),
+                )
+              }
             >
               <Icon />
               {label}
@@ -296,7 +336,10 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
                 <span className="slash">/</span>
                 {connection.tenant}
               </span>
-              <button className="text-button" onClick={disconnect}>
+              <button
+                className="text-button"
+                onClick={() => guarded(disconnect)}
+              >
                 <ArrowRightOnRectangleIcon />
                 Disconnect
               </button>
@@ -307,13 +350,26 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
         <main id="main-content">
           <div className="page-heading">
             <h1>
-              {section === "keys"
-                ? "Keys"
-                : section === "secrets"
-                  ? "Secrets"
-                  : "Advanced"}
+              {azureKind
+                ? `${azureKind === "keys" ? "Keys" : "Secrets"} (Azure-style)`
+                : section === "keys"
+                  ? "Keys"
+                  : section === "secrets"
+                    ? "Secrets"
+                    : "Advanced"}
             </h1>
           </div>
+          {pendingNavigation && (
+            <DiscardDialog
+              onStay={() => setPendingNavigation(undefined)}
+              onDiscard={() => {
+                const action = pendingNavigation;
+                setPendingNavigation(undefined);
+                dirtyInput.current = false;
+                action();
+              }}
+            />
+          )}
           {!connection ? (
             <section
               className="panel connect-panel"
@@ -409,6 +465,22 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
                 </p>
               )}
             </section>
+          ) : azureKind ? (
+            <AzureVaultPanel
+              key={`${connection.environment}/${connection.tenant}/${azureKind}`}
+              kind={azureKind}
+              connection={connection}
+              onDirty={(value) => {
+                dirtyInput.current = value;
+              }}
+              onMutation={() => setInventoryRevision((v) => v + 1)}
+              onUnauthorized={() => {
+                disconnect();
+                setError(
+                  "Vault authentication expired. Reconnect with a valid token.",
+                );
+              }}
+            />
           ) : (
             <>
               <InventoryPanel
@@ -432,7 +504,20 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
                   );
                 }}
               />
-              <div className="content-grid">
+              <div
+                className="content-grid"
+                onChangeCapture={() => {
+                  if (
+                    ![
+                      "key-read",
+                      "secret-read",
+                      "key-versions",
+                      "secret-versions",
+                    ].includes(operationId)
+                  )
+                    dirtyInput.current = true;
+                }}
+              >
                 <section className="panel operation-panel">
                   <div className="panel-heading">
                     <div>

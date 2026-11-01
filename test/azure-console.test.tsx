@@ -1,0 +1,389 @@
+import { test, afterEach } from "node:test";
+import assert from "node:assert/strict";
+import React from "react";
+import { JSDOM } from "jsdom";
+const dom = new JSDOM("<!doctype html><html><body></body></html>", {
+  url: "http://localhost:4001",
+});
+Object.assign(globalThis, {
+  window: dom.window,
+  document: dom.window.document,
+  HTMLElement: dom.window.HTMLElement,
+  HTMLInputElement: dom.window.HTMLInputElement,
+  FormData: dom.window.FormData,
+  MutationObserver: dom.window.MutationObserver,
+  IS_REACT_ACT_ENVIRONMENT: true,
+});
+const { render, screen, fireEvent, cleanup, waitFor, act } = await import(
+  "@testing-library/react"
+);
+const { VaultConsole } = await import("../src/components/vault-console");
+const originalFetch = globalThis.fetch;
+const id = "http://127.0.0.1:4000/namespaces/development/club-a/secrets/demo/";
+const versions = {
+  value: [
+    { id: id + "v1", attributes: { enabled: true, created: 1, updated: 1 } },
+    {
+      id: id + "v2",
+      attributes: { enabled: false, created: 2, updated: 2 },
+      contentType: "text/plain",
+    },
+  ],
+};
+let calls: { url: string; method: string; body?: Record<string, unknown> }[] =
+  [];
+function setup(
+  handler?: (url: string, init?: RequestInit) => Promise<Response>,
+) {
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    calls.push({
+      url,
+      method: init?.method ?? "GET",
+      body: init?.body ? JSON.parse(String(init.body)) : undefined,
+    });
+    if (url.endsWith("/local/session"))
+      return Response.json({
+        authenticated: true,
+        environment: "development",
+        tenant: "club-a",
+      });
+    if (handler) {
+      const result = await handler(url, init);
+      return result;
+    }
+    return Response.json(url.endsWith("/versions") ? versions : { value: [] });
+  };
+  render(<VaultConsole />);
+}
+async function connect() {
+  fireEvent.change(screen.getByLabelText("Tenant / namespace"), {
+    target: { value: "club-a" },
+  });
+  fireEvent.change(screen.getByLabelText("Vault bearer token"), {
+    target: { value: "fixture-token-for-tests-123456789012345" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Connect to namespace" }));
+  await screen.findByRole("button", { name: "Disconnect" });
+}
+async function secrets() {
+  await connect();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Secrets (Azure-style)" }),
+  );
+  await screen.findByRole("button", { name: "Generate/Import" });
+}
+afterEach(() => {
+  cleanup();
+  globalThis.fetch = originalFetch;
+  calls = [];
+});
+test("adds two sections without removing fallback and opens history without reading values", async () => {
+  setup();
+  await secrets();
+  for (const name of [
+    "Keys",
+    "Secrets",
+    "Advanced",
+    "Keys (Azure-style)",
+    "Secrets (Azure-style)",
+  ])
+    assert.ok(screen.getByRole("button", { name }));
+  fireEvent.change(screen.getByLabelText("Open by name"), {
+    target: { value: "demo" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Open versions" }));
+  await screen.findByText("CURRENT VERSION");
+  assert.ok(screen.getByRole("button", { name: "Version v2" }));
+  assert.equal(screen.getAllByText("Disabled").length, 2);
+  assert.equal(
+    calls.some((c) => c.url.endsWith("/secrets/demo")),
+    false,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Version v1" }));
+  assert.ok(await screen.findByRole("button", { name: "Edit metadata" }));
+});
+test("creates a secret with masked input, refreshes metadata and discards echoed value", async () => {
+  setup(async (url, init) =>
+    init?.method === "PUT"
+      ? Response.json({
+          id: id + "v3",
+          value: "echo-sensitive",
+          attributes: { enabled: true },
+        })
+      : Response.json(url.endsWith("/versions") ? versions : { value: [] }),
+  );
+  await secrets();
+  fireEvent.click(screen.getByRole("button", { name: "Generate/Import" }));
+  fireEvent.change(screen.getByLabelText("Name"), {
+    target: { value: "demo" },
+  });
+  fireEvent.change(screen.getByLabelText("Secret value"), {
+    target: { value: "synthetic-secret" },
+  });
+  assert.equal(
+    screen.getByLabelText("Secret value").getAttribute("type"),
+    "password",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Create secret" }));
+  await screen.findByText(/Saved to vault/);
+  assert.deepEqual(calls.find((c) => c.method === "PUT")?.body, {
+    value: "synthetic-secret",
+    attributes: { enabled: true },
+  });
+  assert.equal(document.body.textContent?.includes("echo-sensitive"), false);
+  assert.equal(dom.window.localStorage.length, 0);
+});
+test("metadata editing uses exact PATCH and no secret read; new value creates a new version", async () => {
+  setup(async (url, init) =>
+    init?.method === "PATCH"
+      ? Response.json({ id: id + "v2", attributes: { enabled: true } })
+      : init?.method === "PUT"
+        ? Response.json({ id: id + "v3", value: "echo" })
+        : Response.json(url.endsWith("/versions") ? versions : { value: [] }),
+  );
+  await secrets();
+  fireEvent.change(screen.getByLabelText("Open by name"), {
+    target: { value: "demo" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Open versions" }));
+  await screen.findByText("CURRENT VERSION");
+  fireEvent.click(screen.getByRole("button", { name: "Version v2" }));
+  fireEvent.click(screen.getByRole("button", { name: "Edit metadata" }));
+  await screen.findByRole("button", { name: "Save metadata" });
+  assert.equal(screen.queryByLabelText("Secret value"), null);
+  fireEvent.click(screen.getByRole("button", { name: "Save metadata" }));
+  await screen.findByText(/Saved to vault/);
+  assert.ok(
+    calls.find((c) => c.method === "PATCH" && c.url.endsWith("/demo/v2")),
+  );
+  assert.equal(
+    calls.some((c) => c.method === "GET" && c.url.endsWith("/secrets/demo/v2")),
+    false,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "New version" }));
+  fireEvent.change(screen.getByLabelText("Secret value"), {
+    target: { value: "new-synthetic" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Create new version" }));
+  await screen.findByText(/Saved to vault/);
+  assert.equal(calls.filter((c) => c.method === "PUT").length, 1);
+});
+test("generates only supported RSA key options", async () => {
+  setup(async (url, init) =>
+    init?.method === "POST"
+      ? Response.json({
+          key: { kid: id.replace("/secrets/", "/keys/") + "k1" },
+        })
+      : Response.json({ value: [] }),
+  );
+  await connect();
+  fireEvent.click(screen.getByRole("button", { name: "Keys (Azure-style)" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Generate key" }));
+  fireEvent.change(screen.getByLabelText("Name"), {
+    target: { value: "demo" },
+  });
+  fireEvent.change(screen.getByLabelText("RSA key size"), {
+    target: { value: "3072" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Create key" }));
+  await screen.findByText(/Saved to vault/);
+  assert.deepEqual(calls.find((c) => c.method === "POST")?.body, {
+    kty: "RSA",
+    key_size: 3072,
+    key_ops: ["encrypt", "decrypt"],
+    attributes: { enabled: true },
+  });
+});
+test("dirty forms can stay or discard before switching sections", async () => {
+  setup();
+  await secrets();
+  fireEvent.click(screen.getByRole("button", { name: "Generate/Import" }));
+  fireEvent.change(screen.getByLabelText("Name"), {
+    target: { value: "unsaved" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Keys" }));
+  assert.ok(screen.getByRole("button", { name: "Stay" }));
+  fireEvent.click(screen.getByRole("button", { name: "Stay" }));
+  assert.equal(
+    (screen.getByLabelText("Name") as HTMLInputElement).value,
+    "unsaved",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Keys" }));
+  fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+  assert.ok(await screen.findByLabelText("Resource name"));
+});
+test("ambiguous write keeps form and never automatically retries", async () => {
+  setup(async (url, init) => {
+    if (init?.method === "PUT")
+      return Response.json(
+        { error: { code: "VaultUnavailable" } },
+        { status: 504 },
+      );
+    return Response.json({ value: [] });
+  });
+  await secrets();
+  fireEvent.click(screen.getByRole("button", { name: "Generate/Import" }));
+  fireEvent.change(screen.getByLabelText("Name"), {
+    target: { value: "demo" },
+  });
+  fireEvent.change(screen.getByLabelText("Secret value"), {
+    target: { value: "test" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Create secret" }));
+  await screen.findByText(/outcome is unknown/);
+  assert.equal(calls.filter((c) => c.method === "PUT").length, 1);
+  assert.equal(
+    (screen.getByLabelText("Secret value") as HTMLInputElement).value,
+    "test",
+  );
+});
+test("imports a file only on explicit submit and preserves BOM and newlines", async () => {
+  setup(async (url, init) =>
+    init?.method === "PUT"
+      ? Response.json({ id: id + "v3", value: "echo" })
+      : Response.json(url.endsWith("/versions") ? versions : { value: [] }),
+  );
+  await secrets();
+  fireEvent.click(screen.getByRole("button", { name: "Generate/Import" }));
+  fireEvent.change(screen.getByLabelText("Name"), {
+    target: { value: "demo" },
+  });
+  fireEvent.change(screen.getByLabelText("Upload options"), {
+    target: { value: "file" },
+  });
+  const bytes = new TextEncoder().encode("\ufefffixture\r\n");
+  fireEvent.change(screen.getByLabelText("UTF-8 text file"), {
+    target: {
+      files: [{ size: bytes.length, arrayBuffer: async () => bytes.buffer }],
+    },
+  });
+  await screen.findByText("File ready. Value remains masked.");
+  assert.equal(calls.filter((c) => c.method === "PUT").length, 0);
+  fireEvent.click(screen.getByRole("button", { name: "Create secret" }));
+  await screen.findByText(/Saved to vault/);
+  assert.equal(
+    calls.find((c) => c.method === "PUT")?.body?.value,
+    "\ufefffixture\r\n",
+  );
+});
+test("a late history response cannot repopulate after disconnect", async () => {
+  let resolve!: (r: Response) => void;
+  setup(async (url) =>
+    url.endsWith("/versions")
+      ? new Promise((r) => {
+          resolve = r;
+        })
+      : Response.json({ value: [] }),
+  );
+  await secrets();
+  fireEvent.change(screen.getByLabelText("Open by name"), {
+    target: { value: "demo" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Open versions" }));
+  await waitFor(() => assert.ok(resolve));
+  fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+  await act(async () => resolve(Response.json(versions)));
+  assert.equal(screen.queryByText("CURRENT VERSION"), null);
+  assert.ok(screen.getByRole("button", { name: "Connect to namespace" }));
+});
+test("denied list access still allows opening a known name", async () => {
+  setup(async (url) =>
+    url.endsWith("/versions")
+      ? Response.json(versions)
+      : Response.json({ error: { code: "Forbidden" } }, { status: 403 }),
+  );
+  await secrets();
+  await screen.findByText(/Permission denied/);
+  fireEvent.change(screen.getByLabelText("Open by name"), {
+    target: { value: "demo" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Open versions" }));
+  await screen.findByText("CURRENT VERSION");
+  assert.equal(screen.queryByText(/Permission denied/), null);
+});
+test("an existing date cannot be cleared while metadata remains editable", async () => {
+  const dated = {
+    value: [
+      {
+        id: id + "v1",
+        attributes: {
+          enabled: true,
+          created: 1,
+          updated: 1,
+          nbf: 100,
+          exp: 200,
+        },
+      },
+    ],
+  };
+  setup(async () => Response.json(dated));
+  await secrets();
+  fireEvent.change(screen.getByLabelText("Open by name"), {
+    target: { value: "demo" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Open versions" }));
+  await screen.findByText("CURRENT VERSION");
+  fireEvent.click(screen.getByRole("button", { name: "Edit metadata" }));
+  await screen.findByRole("button", { name: "Save metadata" });
+  assert.equal(
+    (screen.getByLabelText("Set activation date") as HTMLInputElement).disabled,
+    true,
+  );
+  assert.equal(
+    (screen.getByLabelText("Set expiration date") as HTMLInputElement).disabled,
+    true,
+  );
+  assert.ok(screen.getByText(/Existing activation date can be changed/));
+});
+test("unsaved dialog traps keyboard focus and Escape preserves input", async () => {
+  setup();
+  await secrets();
+  fireEvent.click(screen.getByRole("button", { name: "Generate/Import" }));
+  fireEvent.change(screen.getByLabelText("Name"), {
+    target: { value: "dirty" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Keys" }));
+  const stay = screen.getByRole("button", { name: "Stay" }),
+    discard = screen.getByRole("button", { name: "Discard changes" });
+  discard.focus();
+  fireEvent.keyDown(discard, { key: "Tab" });
+  assert.equal(document.activeElement, stay);
+  fireEvent.keyDown(stay, { key: "Escape" });
+  assert.equal(screen.queryByRole("alertdialog"), null);
+  assert.equal(
+    (screen.getByLabelText("Name") as HTMLInputElement).value,
+    "dirty",
+  );
+});
+test("a pending write disables fields and prevents duplicate submission", async () => {
+  let resolve!: (r: Response) => void;
+  setup(async (url, init) =>
+    init?.method === "PUT"
+      ? new Promise((r) => {
+          resolve = r;
+        })
+      : Response.json(url.endsWith("/versions") ? versions : { value: [] }),
+  );
+  await secrets();
+  fireEvent.click(screen.getByRole("button", { name: "Generate/Import" }));
+  fireEvent.change(screen.getByLabelText("Name"), {
+    target: { value: "demo" },
+  });
+  fireEvent.change(screen.getByLabelText("Secret value"), {
+    target: { value: "original" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Create secret" }));
+  await waitFor(() => assert.ok(resolve));
+  assert.equal(
+    (screen.getByLabelText("Name") as HTMLInputElement).closest("fieldset")
+      ?.disabled,
+    true,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Saving…" }));
+  assert.equal(calls.filter((c) => c.method === "PUT").length, 1);
+  await act(async () =>
+    resolve(Response.json({ id: id + "v3", value: "echo" })),
+  );
+  await screen.findByText(/Saved to vault/);
+});
