@@ -89,6 +89,7 @@ test("adds two sections without removing fallback and opens history without read
     "Secrets (Azure-style)",
   ])
     assert.ok(screen.getByRole("button", { name }));
+  fireEvent.click(screen.getByText("Open by name…"));
   fireEvent.change(screen.getByLabelText("Open by name"), {
     target: { value: "demo" },
   });
@@ -143,6 +144,7 @@ test("metadata editing uses exact PATCH and no secret read; new value creates a 
         : Response.json(url.endsWith("/versions") ? versions : { value: [] }),
   );
   await secrets();
+  fireEvent.click(screen.getByText("Open by name…"));
   fireEvent.change(screen.getByLabelText("Open by name"), {
     target: { value: "demo" },
   });
@@ -277,6 +279,7 @@ test("a late history response cannot repopulate after disconnect", async () => {
       : Response.json({ value: [] }),
   );
   await secrets();
+  fireEvent.click(screen.getByText("Open by name…"));
   fireEvent.change(screen.getByLabelText("Open by name"), {
     target: { value: "demo" },
   });
@@ -295,6 +298,7 @@ test("denied list access still allows opening a known name", async () => {
   );
   await secrets();
   await screen.findByText(/Permission denied/);
+  fireEvent.click(screen.getByText("Open by name…"));
   fireEvent.change(screen.getByLabelText("Open by name"), {
     target: { value: "demo" },
   });
@@ -319,6 +323,7 @@ test("an existing date cannot be cleared while metadata remains editable", async
   };
   setup(async () => Response.json(dated));
   await secrets();
+  fireEvent.click(screen.getByText("Open by name…"));
   fireEvent.change(screen.getByLabelText("Open by name"), {
     target: { value: "demo" },
   });
@@ -397,6 +402,7 @@ test("opening a create form cancels pending history so late metadata cannot disc
       : Response.json({ value: [] }),
   );
   await secrets();
+  fireEvent.click(screen.getByText("Open by name…"));
   fireEvent.change(screen.getByLabelText("Open by name"), {
     target: { value: "demo" },
   });
@@ -436,6 +442,7 @@ test("metadata dates outside browser date range remain readable and are preserve
         ),
   );
   await secrets();
+  fireEvent.click(screen.getByText("Open by name…"));
   fireEvent.change(screen.getByLabelText("Open by name"), {
     target: { value: "demo" },
   });

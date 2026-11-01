@@ -320,9 +320,11 @@ export function AzureVaultPanel({
           {error}
         </p>
       )}
-      <p role="status" className="muted">
-        {busy ? "Loading…" : ""}
-      </p>
+      {busy && (
+        <p role="status" className="muted">
+          Loading…
+        </p>
+      )}
       {pending && (
         <DiscardDialog
           onStay={() => setPending(undefined)}
@@ -355,7 +357,35 @@ export function AzureVaultPanel({
         />
       ) : (
         <>
-          <div className="azure-toolbar">
+          <div className="azure-resource-toolbar">
+            <form
+              className="azure-search"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setNext(undefined);
+                void refreshList();
+              }}
+            >
+              <label className="azure-search-field">
+                <span className="sr-only">Search by name or purpose</span>
+                <input
+                  type="search"
+                  placeholder="Search name or purpose…"
+                  value={search}
+                  maxLength={512}
+                  onChange={(e) => {
+                    controller.current?.abort();
+                    epoch.current++;
+                    setBusy(false);
+                    setSearch(e.target.value);
+                    setNext(undefined);
+                    setRows([]);
+                  }}
+                />
+              </label>
+              <button disabled={busy}>Search</button>
+            </form>
+
             <button
               onClick={() =>
                 showForm(kind === "keys" ? "create-key" : "create-secret")
@@ -398,50 +428,28 @@ export function AzureVaultPanel({
               </>
             )}
           </div>
-          <form
-            className="azure-toolbar"
-            onSubmit={(e) => {
-              e.preventDefault();
-              setNext(undefined);
-              void refreshList();
-            }}
-          >
-            <label className="field">
-              Search by name or purpose
-              <input
-                value={search}
-                maxLength={512}
-                onChange={(e) => {
-                  controller.current?.abort();
-                  epoch.current++;
-                  setBusy(false);
-                  setSearch(e.target.value);
-                  setNext(undefined);
-                  setRows([]);
-                }}
-              />
-            </label>
-            <button disabled={busy}>Search</button>
-          </form>
-          <form
-            className="azure-toolbar"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void loadHistory(nameInput);
-            }}
-          >
-            <label className="field">
-              Open by name
-              <input
-                value={nameInput}
-                required
-                maxLength={127}
-                pattern="[A-Za-z0-9-]{1,127}"
-                onChange={(e) => setNameInput(e.target.value)}
-              />
-            </label>
-            <button disabled={busy}>Open versions</button>
-          </form>
+          <details className="azure-open-by-name">
+            <summary>Open by name…</summary>
+            <form
+              className="azure-open-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void loadHistory(nameInput);
+              }}
+            >
+              <label className="field">
+                Open by name
+                <input
+                  value={nameInput}
+                  required
+                  maxLength={127}
+                  pattern="[A-Za-z0-9-]{1,127}"
+                  onChange={(e) => setNameInput(e.target.value)}
+                />
+              </label>
+              <button disabled={busy}>Open versions</button>
+            </form>
+          </details>
           {history.length > 0 && (
             <div className="azure-history">
               <h3>CURRENT VERSION</h3>
