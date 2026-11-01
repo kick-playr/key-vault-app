@@ -46,7 +46,7 @@ export function AzureVaultPanel({
 }: Props) {
   const [rows, setRows] = useState<InventoryRow[]>([]),
     [next, setNext] = useState<string>();
-  const [prefix, setPrefix] = useState(""),
+  const [search, setSearch] = useState(""),
     [nameInput, setNameInput] = useState(""),
     [name, setName] = useState("");
   const [history, setHistory] = useState<VaultVersion[]>([]),
@@ -139,7 +139,7 @@ export function AzureVaultPanel({
       kind: kind === "keys" ? "key" : "secret",
       maxresults: "25",
     });
-    if (prefix) q.set("namePrefix", prefix);
+    if (search) q.set("search", search);
     return "local/inventory?" + q;
   }
   async function inventory(task: Task, path = inventoryPath(), append = false) {
@@ -306,7 +306,9 @@ export function AzureVaultPanel({
               : kind === "keys"
                 ? "Generate key"
                 : "Generate/Import"
-          : name || (kind === "keys" ? "Encryption keys" : "Secrets")}
+          : selected?.tags?.purpose ||
+            name ||
+            (kind === "keys" ? "Encryption keys" : "Secrets")}
       </h2>
       {notice && (
         <p role="status" className="azure-success">
@@ -405,16 +407,15 @@ export function AzureVaultPanel({
             }}
           >
             <label className="field">
-              Search by name prefix
+              Search by name or purpose
               <input
-                value={prefix}
-                maxLength={127}
-                pattern="[A-Za-z0-9-]*"
+                value={search}
+                maxLength={512}
                 onChange={(e) => {
                   controller.current?.abort();
                   epoch.current++;
                   setBusy(false);
-                  setPrefix(e.target.value);
+                  setSearch(e.target.value);
                   setNext(undefined);
                   setRows([]);
                 }}
@@ -496,7 +497,7 @@ export function AzureVaultPanel({
           )}
           {!busy && !rows.length && (
             <p className="muted">
-              {prefix
+              {search
                 ? "No matching resources."
                 : "No resources loaded. Create one, refresh, or open by name if list permission is unavailable."}
             </p>
@@ -516,8 +517,13 @@ export function AzureVaultPanel({
                   <tr key={row.name}>
                     <td data-label="Name">
                       <button onClick={() => void loadHistory(row.name)}>
-                        {row.name}
+                        {row.purpose || row.name}
                       </button>
+                      {row.purpose && row.purpose !== row.name && (
+                        <small className="muted azure-resource-id">
+                          {row.name}
+                        </small>
+                      )}
                     </td>
                     <td data-label="Status">
                       {lifecycle({

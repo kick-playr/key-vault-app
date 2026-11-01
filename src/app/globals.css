@@ -1058,3 +1058,8 @@ main {
     min-width: 0;
   }
 }
+.azure-resource-id {
+  display: block;
+  overflow-wrap: anywhere;
+  margin: 4px 0 0;
+}

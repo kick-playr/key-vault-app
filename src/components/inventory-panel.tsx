@@ -238,6 +238,7 @@ export function InventoryPanel({
             )}
             {(
               [
+                ["search", "Name or purpose"],
                 ["name", "Exact name"],
                 ["namePrefix", "Name prefix"],
                 ["purpose", "Purpose"],
@@ -319,7 +320,10 @@ export function InventoryPanel({
               {rows.map((row) => (
                 <tr key={row.kind + "/" + row.name}>
                   <td>
-                    <strong>{row.name}</strong>
+                    <strong>{row.purpose || row.name}</strong>
+                    {row.purpose && row.purpose !== row.name && (
+                      <small>{row.name}</small>
+                    )}
                     {row.version && <small>Version: {row.version}</small>}
                   </td>
                   <td>

@@ -478,3 +478,48 @@ test("discarding through the current section resets its sensitive form too", asy
     "",
   );
 });
+test("shows purpose as name while opening the physical resource and searching either field", async () => {
+  const physical = "hashed-secret";
+  setup(async (url) =>
+    url.endsWith("/versions")
+      ? Response.json({ value: [] })
+      : Response.json({
+          value: [
+            {
+              name: physical,
+              kind: "secret",
+              id: id.replace("/demo/", `/${physical}`),
+              version: "v1",
+              versionId: id.replace("/demo/", `/${physical}/`) + "v1",
+              attributes: { enabled: true },
+              tags: { purpose: "Database password" },
+              purpose: "Database password",
+            },
+          ],
+        }),
+  );
+  await secrets();
+  const button = await screen.findByRole("button", {
+    name: "Database password",
+  });
+  assert.ok(screen.getByText(physical));
+  fireEvent.click(button);
+  await waitFor(() =>
+    assert.ok(
+      calls.some((c) => c.url.endsWith("/secrets/hashed-secret/versions")),
+    ),
+  );
+  fireEvent.change(screen.getByLabelText("Search by name or purpose"), {
+    target: { value: "BASE pass" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
+  await waitFor(() =>
+    assert.ok(
+      calls.some(
+        (c) =>
+          new URL(c.url, "http://localhost").searchParams.get("search") ===
+          "BASE pass",
+      ),
+    ),
+  );
+});

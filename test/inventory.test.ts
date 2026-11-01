@@ -191,3 +191,38 @@ test("preserves only safe inventory error codes for restart guidance", async () 
     assert.deepEqual(await response.json(), { error: { code, message: code } });
   }
 });
+test("allows bounded literal name-or-purpose search only on local inventory", () => {
+  assert.equal(
+    inventoryQuery({ search: "Data Base.*" }, true).get("search"),
+    "Data Base.*",
+  );
+  for (const search of ["x".repeat(513), "bad\nsearch"])
+    assert.throws(() => inventoryQuery({ search }, true));
+  assert.throws(() => inventoryQuery({ search: "database" }, false));
+});
+test("forwards name-or-purpose search through the existing scoped proxy", async () => {
+  let observed = "";
+  const response = await forwardVault(
+    new Request(
+      "http://127.0.0.1:4001/api/vault/local/inventory?kind=secret&search=Data+Base",
+      {
+        headers: {
+          "x-vault-token": "fixture-token-123456789012345678901234",
+          "x-vault-environment": "dev",
+          "x-vault-tenant": "club-a",
+        },
+      },
+    ),
+    ["local", "inventory"],
+    {
+      userId: "fixture",
+      upstream: "http://127.0.0.1:4000",
+      fetch: async (url) => {
+        observed = String(url);
+        return Response.json({ value: [] });
+      },
+    },
+  );
+  assert.equal(response.status, 200);
+  assert.equal(new URL(observed).searchParams.get("search"), "Data Base");
+});
