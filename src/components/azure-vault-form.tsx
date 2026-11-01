@@ -20,7 +20,9 @@ interface Props {
   onDirty: (dirty: boolean) => void;
 }
 const dateInput = (n?: number) =>
-  n === undefined ? "" : new Date(n * 1000).toISOString().slice(0, 19);
+  n === undefined || n > 253402300799
+    ? ""
+    : new Date(n * 1000).toISOString().slice(0, 19);
 export function AzureVaultForm({
   mode,
   name,
@@ -77,9 +79,13 @@ export function AzureVaultForm({
         ["nbf", nbf],
         ["exp", exp],
       ] as const) {
-        if (checked)
-          fields[field] = String(utcEpoch(String(data.get(field) ?? "")));
-        else if (editing && selected?.attributes[field] !== undefined)
+        if (checked) {
+          const original = selected?.attributes[field];
+          fields[field] =
+            original !== undefined && original > 253402300799
+              ? String(original)
+              : String(utcEpoch(String(data.get(field) ?? "")));
+        } else if (editing && selected?.attributes[field] !== undefined)
           throw Error("Existing dates cannot be cleared by this API.");
       }
       if (!key) {
@@ -324,17 +330,27 @@ export function AzureVaultForm({
                     cannot be cleared.
                   </p>
                 )}
-                {checked && (
-                  <label className="field">
-                    {label} date and time (UTC)
-                    <input
-                      type="datetime-local"
-                      step="1"
-                      name={field}
-                      required
-                      defaultValue={dateInput(selected?.attributes[field])}
-                    />
-                  </label>
+                {checked &&
+                selected?.attributes[field] !== undefined &&
+                selected.attributes[field]! > 253402300799 ? (
+                  <p className="muted">
+                    {label}: {selected.attributes[field]} epoch seconds is
+                    outside the date control range and will be preserved
+                    unchanged.
+                  </p>
+                ) : (
+                  checked && (
+                    <label className="field">
+                      {label} date and time (UTC)
+                      <input
+                        type="datetime-local"
+                        step="1"
+                        name={field}
+                        required
+                        defaultValue={dateInput(selected?.attributes[field])}
+                      />
+                    </label>
+                  )
                 )}
               </div>
             );

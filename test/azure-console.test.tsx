@@ -387,3 +387,94 @@ test("a pending write disables fields and prevents duplicate submission", async 
   );
   await screen.findByText(/Saved to vault/);
 });
+test("opening a create form cancels pending history so late metadata cannot discard typed input", async () => {
+  let resolve!: (r: Response) => void;
+  setup(async (url) =>
+    url.endsWith("/versions")
+      ? new Promise((r) => {
+          resolve = r;
+        })
+      : Response.json({ value: [] }),
+  );
+  await secrets();
+  fireEvent.change(screen.getByLabelText("Open by name"), {
+    target: { value: "demo" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Open versions" }));
+  await waitFor(() => assert.ok(resolve));
+  fireEvent.click(screen.getByRole("button", { name: "Generate/Import" }));
+  fireEvent.change(screen.getByLabelText("Secret value"), {
+    target: { value: "keep-me" },
+  });
+  await act(async () => resolve(Response.json(versions)));
+  assert.equal(
+    (screen.queryByLabelText("Secret value") as HTMLInputElement | null)?.value,
+    "keep-me",
+  );
+});
+test("metadata dates outside browser date range remain readable and are preserved on save", async () => {
+  const far = Number.MAX_SAFE_INTEGER;
+  setup(async (url, init) =>
+    init?.method === "PATCH"
+      ? Response.json({ id: id + "v1", attributes: { enabled: true } })
+      : Response.json(
+          url.endsWith("/versions")
+            ? {
+                value: [
+                  {
+                    id: id + "v1",
+                    attributes: {
+                      enabled: true,
+                      created: 1,
+                      updated: 1,
+                      exp: far,
+                    },
+                  },
+                ],
+              }
+            : { value: [] },
+        ),
+  );
+  await secrets();
+  fireEvent.change(screen.getByLabelText("Open by name"), {
+    target: { value: "demo" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Open versions" }));
+  await screen.findByText("CURRENT VERSION");
+  fireEvent.click(screen.getByRole("button", { name: "Edit metadata" }));
+  await screen.findByRole("button", { name: "Save metadata" });
+  assert.ok(screen.getByText(/outside the date control range/));
+  fireEvent.click(screen.getByRole("button", { name: "Save metadata" }));
+  await screen.findByText(/Saved to vault/);
+  assert.equal(
+    (
+      calls.find((c) => c.method === "PATCH")?.body?.attributes as Record<
+        string,
+        unknown
+      >
+    ).exp,
+    far,
+  );
+});
+test("discarding through the current section resets its sensitive form too", async () => {
+  setup();
+  await secrets();
+  fireEvent.click(screen.getByRole("button", { name: "Generate/Import" }));
+  fireEvent.change(screen.getByLabelText("Secret value"), {
+    target: { value: "discard-me" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Secrets (Azure-style)" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+  assert.equal(
+    (screen.queryByLabelText("Secret value") as HTMLInputElement | null)
+      ?.value ?? "",
+    "",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Generate/Import" }));
+  assert.equal(
+    (screen.getByLabelText("Secret value") as HTMLInputElement).value,
+    "",
+  );
+});

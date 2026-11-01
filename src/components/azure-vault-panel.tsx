@@ -18,13 +18,15 @@ interface Props {
   onDirty: (dirty: boolean) => void;
   onUnauthorized: () => void;
 }
-const date = (n?: number) =>
-  n === undefined
-    ? "Not set"
-    : new Date(n * 1000)
-        .toISOString()
-        .replace("T", " ")
-        .replace(".000Z", " UTC");
+const date = (n?: number) => {
+  if (n === undefined) return "Not set";
+  if (n > 253402300799)
+    return `${n} epoch seconds (outside the date control range)`;
+  return new Date(n * 1000)
+    .toISOString()
+    .replace("T", " ")
+    .replace(".000Z", " UTC");
+};
 function lifecycle(v: VaultVersion) {
   const now = Date.now() / 1000;
   return !v.attributes.enabled
@@ -195,8 +197,14 @@ export function AzureVaultPanel({
       setPending(() => action);
     } else action();
   }
+  function cancelRead() {
+    controller.current?.abort();
+    epoch.current++;
+    setBusy(false);
+  }
   function showForm(nextMode: AzureMode) {
     leave(() => {
+      cancelRead();
       markDirty(false);
       setNotice("");
       setError("");
@@ -358,7 +366,6 @@ export function AzureVaultPanel({
               onClick={() => {
                 setNext(undefined);
                 void refreshList();
-                if (name) setHistory([]);
               }}
             >
               Refresh list
@@ -378,6 +385,7 @@ export function AzureVaultPanel({
                 )}
                 <button
                   onClick={() => {
+                    cancelRead();
                     setName("");
                     setHistory([]);
                     setSelected(undefined);

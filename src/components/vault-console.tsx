@@ -467,7 +467,7 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
             </section>
           ) : azureKind ? (
             <AzureVaultPanel
-              key={`${connection.environment}/${connection.tenant}/${azureKind}`}
+              key={`${connection.environment}/${connection.tenant}/${azureKind}/${formEpoch}`}
               kind={azureKind}
               connection={connection}
               onDirty={(value) => {

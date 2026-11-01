@@ -1049,3 +1049,12 @@ main {
   gap: 20px;
   min-width: 0;
 }
+@media (max-width: 560px) {
+  .sidebar nav {
+    flex-wrap: wrap;
+  }
+  .nav-item {
+    flex: 1 1 130px;
+    min-width: 0;
+  }
+}
