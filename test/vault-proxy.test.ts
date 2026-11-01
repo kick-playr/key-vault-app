@@ -97,7 +97,7 @@ test("rejects cross-origin, non-loopback and disallowed destinations/routes", as
   for (const path of [
     ["keys", ".."],
     ["keys", "%2f"],
-    ["keys"],
+    ["certificates"],
     ["local", "grants"],
     ["keys", "demo", "version", "sign"],
   ])

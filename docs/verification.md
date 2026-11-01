@@ -2,7 +2,7 @@
 
 ## Automated checks
 
-- `npm test`: 18 passing tests across operation construction, server forwarder, rendered React interactions and an isolated HTTP secret-lifecycle fixture.
+- `npm test`: 28 passing tests across operation construction, server forwarder, rendered React interactions and an isolated HTTP secret-lifecycle fixture.
 - `npm run typecheck`: passed.
 - `npm run build`: passed with Next.js 16.4.3; home, sign-in and vault route compile successfully.
 
@@ -24,3 +24,11 @@ Screenshots: [desktop fixture](screenshots/desktop-fixture.png), [mobile fixture
 An independent code review identified Clerk's Authorization-header collision and form-reset/reconciliation-retry issues. Both were fixed with failing-then-passing regression tests; follow-up review reported no additional important findings.
 
 The operation tests cover every route in the matrix, but are not a live Azure conformance certification. The HTTP fixture is not the real Nest/MongoDB API. Real Clerk session verification, provider connectivity and full UI → Clerk → Nest → MongoDB flows remain unverified because no application-specific credentials were supplied. Automated accessibility checks cover labelled controls, roles/statuses and confirmations; they do not replace Freddie's keyboard/screen-reader assessment. Named design/security approvals have not been recorded. No deployment, live secret writes or Jira status changes were performed.
+
+## Inventory/search update
+
+Re-read the API working tree when the user reported its concurrent inventory implementation. Integrated GET /keys and /secrets with fixed API version and GET /local/inventory without an API version. Every implemented search filter is represented, and page size accepts any integer 1–25.
+
+UI tests cover metadata-only list/search parsing and selection, independent list/read grants, valid query forwarding, unknown/duplicate/prototype-named parameter rejection, namespace/endpoint-bound nextLink conversion, expired/invalidated page restart, stale responses after filter changes and first-page refresh after writes. The proxy preserves only the explicitly allowlisted inventory error codes, not arbitrary upstream messages.
+
+Also ran `npm test -- --runTestsByPath test/inventory.spec.ts` in key-vault-api: 1 suite, 5 tests passed using its disposable MongoDB fixture. No API source or configuration was modified. This verifies the current working-tree inventory implementation, not a deployed instance. Earlier screenshots predate the inventory panel and remain initial layout evidence.

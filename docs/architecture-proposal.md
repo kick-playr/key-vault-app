@@ -31,7 +31,7 @@ This section describes the implemented initial boundary for Chris to review; it 
 
 ## Proposed layout
 
-Persistent connection/namespace header; Keys, Secrets and Advanced navigation. Open/create by name, session resource list, detail and versions pane, compact action forms. Advanced contains manifest reconciliation and snapshot. Show supported local capabilities and limitations. Accessible labels, status announcements, focus management and responsive stacking are required.
+Persistent connection/namespace header; Keys, Secrets and Advanced navigation. Paginated key/secret metadata inventories with filtered search and selection, open/create by name, a separate session history, detail and versions pane, compact action forms. Advanced contains combined filtered inventory, manifest reconciliation and snapshot. Inventory requires a separate list grant and never implies access to secret values. Continuation links are namespace/endpoint validated, converted to same-origin proxy queries and invalidated when filters or context change. Show supported local capabilities and limitations. Accessible labels, status announcements, focus management and responsive stacking are required.
 
 ## Delivery and outstanding assessments
 

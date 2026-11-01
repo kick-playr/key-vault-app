@@ -15,7 +15,7 @@ npm run dev
 
 Open [http://127.0.0.1:3003](http://127.0.0.1:3003). Configure Clerk to allow that local sign-in/redirect origin. Use `127.0.0.1`, not `localhost`: the vault integration is intentionally loopback-only. Without Clerk keys the home page displays setup instructions and vault routes return 503. There is no authentication bypass.
 
-After signing in, enter your environment, tenant/namespace and an existing vault grant token. Use `_shared` for process-scoped manifests. Clerk identifies the user; the scoped vault token independently authorizes API operations. The application does not mint grants or translate Clerk identities into automatic vault privileges. Obtain a grant with only the read/write/crypto permissions needed from your vault administrator.
+After signing in, enter your environment, tenant/namespace and an existing vault grant token. Use `_shared` for process-scoped manifests. Clerk identifies the user; the scoped vault token independently authorizes API operations. The application does not mint grants or translate Clerk identities into automatic vault privileges. Obtain a grant with only the list/read/write/crypto permissions needed from your vault administrator.
 
 `VAULT_API_ORIGIN` is configured only on the server and defaults to `http://127.0.0.1:4000`. It must be a loopback HTTP origin without credentials, paths or query parameters. The UI never reads the vault master key, MongoDB credentials or the API's bootstrap grants file.
 
@@ -23,6 +23,7 @@ If port 3003 is occupied, run `node node_modules/next/dist/bin/next dev --hostna
 
 ## Supported workflows
 
+- **Inventory/search:** Keys and Secrets offer their metadata list endpoints and filtered inventory. Advanced offers combined inventory. Filter by resource kind, exact name, prefix, purpose, enabled status, expiry time and exact tag name/value. Choose any page size from 1 to 25 and use Next page. Selecting metadata fills the resource/version form without reading a value.
 - **Keys:** open by name, read exact/latest public JWK, list/select versions, generate RSA 2048/3072 keys, rotate through new versions, edit enabled/validity/tags/usages, encrypt/decrypt using RSA-OAEP-256, permanently delete all versions after typed-name confirmation.
 - **Secrets:** open latest/exact versions, set/rotate values up to 25 KiB, list/select versions, edit enabled/validity/tags/content type, permanently delete all versions after confirmation.
 - **Advanced:** reconcile a versioned manifest with optionally supplied secrets; validate and load complete runtime snapshots. For `_shared`, change manifest entry scope from `tenant` to `process`.
@@ -33,7 +34,9 @@ Results remain masked until explicitly revealed. Secret input fields clear on su
 
 ## Capability boundaries
 
-The current API exposes no list-all endpoint. **Opened this session** is a bounded in-memory history of successfully opened/created resources, not a complete inventory. Disconnect and reconnect to switch namespace; this aborts outstanding calls and clears history, results and credentials. Stale responses cannot populate a new context.
+The current API working tree provides `GET /keys`, `GET /secrets` and `GET /local/inventory`. Inventory requires a separate **list** grant; existing read/write/crypto grants do not imply it. Lists include only the latest non-deleted resource metadata, including disabled and expired resources, with no secret values or key material. **Opened this session** remains a separate bounded in-memory history and fallback for callers without list permission. Disconnect and reconnect to switch namespace; this aborts outstanding calls and clears history, results and credentials. Stale responses cannot populate a new context.
+
+Cursors expire after 15 minutes and are bound to namespace, endpoint, filters, page size and vault generation. Changing filters clears the current pages. A mutation refreshes loaded inventory from the first page; if another caller changes the vault while you page, reload after the reported pagination conflict. Expired/invalid tokens also require a reload. The UI validates continuation links against the active namespace and endpoint and sends only their allowlisted query parameters through its own proxy. It never sends credentials to a nextLink host.
 
 There are no APIs for grant configuration, namespace inventory, provider discovery, certificates, private-key export, backup, recovery, purge, signing, HSM or migration jobs. No APP-43 migration operation is available. Deletion permanently removes all versions and can prevent ordinary manifest reconciliation from recreating that purpose. Deleting keys may make old ciphertext permanently unreadable.
 

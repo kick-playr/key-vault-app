@@ -17,6 +17,8 @@ import {
   type Section,
 } from "../lib/operations";
 import { OperationForm } from "./operation-form";
+import { InventoryPanel } from "./inventory-panel";
+import type { InventoryRow } from "../lib/inventory";
 type Connection = { environment: string; tenant: string; token: string };
 type Resource = { name: string; section: "keys" | "secrets" };
 const messages: Record<number, string> = {
@@ -31,6 +33,7 @@ const messages: Record<number, string> = {
   504: "The vault request timed out. Check its state before retrying a write.",
 };
 export function VaultConsole({ account }: { account?: React.ReactNode }) {
+  const [inventoryRevision, setInventoryRevision] = useState(0);
   const [connection, setConnection] = useState<Connection | null>(null);
   const [section, setSection] = useState<Section>("keys");
   const [operationId, setOperationId] = useState("key-read");
@@ -137,6 +140,7 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
         throw Error("The vault returned an invalid response.");
       setResult(data as Record<string, unknown>);
       setMessage("Operation completed.");
+      if (operationRequest.method !== "GET") setInventoryRevision((v) => v + 1);
       if (section !== "advanced") {
         setSelectedName(fields.name ?? "");
         setResources((previous) => {
@@ -364,6 +368,21 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
                   Disconnect
                 </button>
               </section>
+              <InventoryPanel
+                key={`${connection.environment}/${connection.tenant}/${section}`}
+                connection={connection}
+                section={section}
+                revision={inventoryRevision}
+                onSelect={(row: InventoryRow) => {
+                  clearOperation();
+                  setSection(row.kind === "key" ? "keys" : "secrets");
+                  setSelectedName(row.name);
+                  setPendingVersion(row.version);
+                  setOperationId(
+                    row.kind === "key" ? "key-read" : "secret-read",
+                  );
+                }}
+              />
               <div className="content-grid">
                 <section className="panel operation-panel">
                   <div className="panel-heading">

@@ -1,3 +1,4 @@
+import { inventoryQuery } from "./inventory";
 /** Server boundary. No credentials, bodies or upstream messages are logged. */
 export interface ProxyOptions {
   userId: string | null;
@@ -21,6 +22,10 @@ function failure(status: number, code: string) {
 }
 export function supportedRoute(method: string, path: string[]) {
   const [kind, name, version, action] = path;
+  if (kind === "local" && path.length === 2 && name === "inventory")
+    return method === "GET";
+  if (["keys", "secrets"].includes(kind ?? "") && path.length === 1)
+    return method === "GET";
   if (kind === "local")
     return (
       path.length === 2 &&
@@ -110,10 +115,25 @@ export async function forwardVault(
   if (
     !scopePattern.test(environment) ||
     !scopePattern.test(tenant) ||
-    !supportedRoute(request.method, path) ||
-    url.search
+    !supportedRoute(request.method, path)
   )
     return failure(400, "BadParameter");
+  const isInventory =
+    request.method === "GET" &&
+    ((path.length === 1 && ["keys", "secrets"].includes(path[0]!)) ||
+      path.join("/") === "local/inventory");
+  let query = new URLSearchParams();
+  try {
+    if (url.search && !isInventory) return failure(400, "BadParameter");
+    const fields: Record<string, string> = Object.create(null);
+    for (const [key, value] of url.searchParams) {
+      if (Object.hasOwn(fields, key)) return failure(400, "BadParameter");
+      fields[key] = value;
+    }
+    if (isInventory) query = inventoryQuery(fields, path[0] === "local");
+  } catch {
+    return failure(400, "BadParameter");
+  }
   let upstream: URL;
   try {
     upstream = new URL(options.upstream);
@@ -150,6 +170,7 @@ export async function forwardVault(
     "/" + path.map(encodeURIComponent).join("/"),
     upstream,
   );
+  target.search = query.toString();
   if (path[0] !== "local") target.searchParams.set("api-version", "2025-07-01");
   try {
     const response = await (options.fetch ?? fetch)(target, {
@@ -166,7 +187,24 @@ export async function forwardVault(
       signal: AbortSignal.any([request.signal, AbortSignal.timeout(5000)]),
     });
     if (!response.ok) {
-      await response.body?.cancel();
+      let inventoryCode: string | undefined;
+      if (isInventory && [400, 409].includes(response.status)) {
+        try {
+          const payload = JSON.parse(await boundedText(response.body, 4096));
+          if (
+            response.status === 400 &&
+            payload?.error?.code === "InvalidContinuationToken"
+          )
+            inventoryCode = "InvalidContinuationToken";
+          if (
+            response.status === 409 &&
+            payload?.error?.code === "PaginationInvalidated"
+          )
+            inventoryCode = "PaginationInvalidated";
+        } catch {
+          /* Never reflect arbitrary upstream messages. */
+        }
+      } else await response.body?.cancel();
       const codes: Record<number, string> = {
         400: "BadParameter",
         401: "Unauthorized",
@@ -181,7 +219,7 @@ export async function forwardVault(
         response.status >= 400 && response.status <= 599
           ? response.status
           : 502,
-        codes[response.status] ?? "VaultOperationFailed",
+        inventoryCode ?? codes[response.status] ?? "VaultOperationFailed",
       );
     }
     const value: unknown = JSON.parse(

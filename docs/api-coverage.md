@@ -1,11 +1,14 @@
 # APP-45 API-to-UI coverage
 
-Status: inventoried before implementation; workflows implemented, human matrix review pending. Source: key-vault-api/src/app.ts and src/config.ts, working tree on 2026-11-01. The verification column describes automated coverage implemented in test/operations.test.ts, test/vault-proxy.test.ts, test/console.test.tsx and test/contract-flow.test.ts. See verification.md for executed checks and limitations.
+Status: inventoried before implementation; workflows implemented, human matrix review pending. Source: key-vault-api/src/app.ts and src/config.ts, working tree on 2026-11-01. The verification column describes automated coverage implemented in test/operations.test.ts, test/vault-proxy.test.ts, test/console.test.tsx and test/contract-flow.test.ts and test/inventory.test.ts. See verification.md for executed checks and limitations.
 
 The browser uses `x-vault-token` to keep the vault credential separate from Clerk authentication; the server translates it to the bearer header upstream. Every upstream data-plane request requires `api-version=2025-07-01`, a bearer token, `x-vault-environment` and `x-vault-tenant`. Routes also accept `/namespaces/{environment}/{tenant}`; path and headers must agree. Local provisioning routes omit the API version. Permissions are enforced by the API.
 
 | Method / route | UI workflow | Permission | Automated verification |
 | --- | --- | --- | --- |
+| GET /keys | Key inventory, page size, next page and metadata selection | list | Query allowlist, fixed API version, safe pagination, denied list |
+| GET /secrets | Secret inventory without values, page size, next page and selection | list | Query allowlist, metadata projection, independent read permission |
+| GET /local/inventory | Combined/filtered inventory by kind, exact name, prefix, purpose, tags, enabled and expiresBefore | list | All filter parameters, scope binding, stale responses, pagination invalidation/restart |
 | POST /keys/{name}/create | Create RSA 2048/3072 key; create new version of existing key | write | Request shape, validation, version creation |
 | GET /keys/{name} | Open key by name; public JWK details | read | Latest version, no private fields |
 | GET /keys/{name}/{version} | Select exact key version | read | Explicit version preserved |
@@ -25,7 +28,8 @@ The browser uses `x-vault-token` to keep the vault credential separate from Cler
 
 ## API limitations affecting the interface
 
-- No list-all keys/secrets endpoint. Start with open-by-name and a session-only list of successfully opened/created resources, labelled as such. Do not imply a complete inventory. A complete inventory needs a separately reviewed API extension.
+- The current API working tree implements paginated key/secret lists and combined metadata search. These require an explicit `list` grant, independent of read/write/crypto. Open-by-name and session history remain available as fallback workflows. Inventory pages describe the latest versions, including disabled/expired resources, and omit deleted objects, values and key material.
+- List/search page sizes are 1–25. Cursors expire after 15 minutes and bind scope, endpoint, filters, page size and namespace generation. `PaginationInvalidated` (409) or `InvalidContinuationToken` (400) requires restarting from the first page. The UI never fetches an arbitrary nextLink origin; it validates scope/path/query and calls its own fixed-upstream route.
 - No namespace, environment, grant, credential or provider management endpoints. Connection inputs supply explicit namespace context; grant configuration remains server bootstrap configuration. Never expose the master key or MongoDB credentials.
 - No provider-discovery endpoint. Describe only this local API's implemented capabilities. APP-36 integration remains conditional on an actual contract.
 - Rotation is explicit key creation/secret set, retaining old versions. No APP-43 migration endpoint, asynchronous jobs, progress API or migration engine is exposed.
@@ -36,3 +40,7 @@ The browser uses `x-vault-token` to keep the vault credential separate from Cler
 ## Cross-cutting verification scope
 
 Use isolated fixtures and a mock upstream; never production secrets. Exercise missing/invalid credentials, read/write/crypto denials, mismatched namespace path/headers, namespace-switch clearing and stale-response cancellation, timeouts, provider failures, malformed responses, validation, empty and loading states. Verify no sensitive values in browser storage, URLs or logs; no cached sensitive responses. Assess desktop/mobile, keyboard navigation, labels, focus restoration, error announcements and destructive confirmation.
+
+## Concurrent inventory contract update
+
+Rechecked API src/app.ts, src/inventory.ts, src/config.ts, Swagger and test/inventory.spec.ts on 2026-11-01 after the user reported concurrent inventory work. The API inventory suite passed all 5 tests with disposable local MongoDB resources. UI integration targets that working-tree contract; no claim is made about a deployed API version.

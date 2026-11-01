@@ -213,3 +213,247 @@ test("version selection fills the exact version without revealing the raw respon
     "demo",
   );
 });
+const { InventoryPanel } = await import("../src/components/inventory-panel");
+const inventoryConnection = {
+  environment: "dev",
+  tenant: "club-a",
+  token: "fixture-token-for-local-tests-only-12345",
+};
+test("inventory search filters, pagination and exact-version selection stay scoped and metadata only", async () => {
+  const calls: string[] = [];
+  let selected: unknown;
+  globalThis.fetch = async (url, init) => {
+    calls.push(String(url));
+    assert.equal(new Headers(init?.headers).get("x-vault-tenant"), "club-a");
+    const name = calls.length === 1 ? "db-one" : "db-two";
+    return Response.json({
+      value: [
+        {
+          name,
+          kind: "secret",
+          id: `http://127.0.0.1:4000/namespaces/dev/club-a/secrets/${name}`,
+          version: "v1",
+          versionId: `http://127.0.0.1:4000/namespaces/dev/club-a/secrets/${name}/v1`,
+          attributes: { enabled: false, exp: 1 },
+          purpose: "database",
+          value: "fixture-must-never-render",
+        },
+      ],
+      ...(calls.length === 1
+        ? {
+            nextLink:
+              "http://127.0.0.1:4000/namespaces/dev/club-a/local/inventory?kind=secret&namePrefix=db-&maxresults=1&$skiptoken=abc.def",
+          }
+        : {}),
+    });
+  };
+  render(
+    <InventoryPanel
+      connection={inventoryConnection}
+      section="secrets"
+      revision={0}
+      onSelect={(row) => {
+        selected = row;
+      }}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText("Inventory source"), {
+    target: { value: "search" },
+  });
+  fireEvent.change(screen.getByLabelText("Name prefix"), {
+    target: { value: "db-" },
+  });
+  fireEvent.change(screen.getByLabelText("Page size"), {
+    target: { value: "1" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Load inventory" }));
+  await screen.findByText("db-one");
+  assert.match(calls[0]!, /^\/api\/vault\/local\/inventory\?/);
+  assert.equal(
+    new URL(calls[0]!, "http://local").searchParams.get("kind"),
+    "secret",
+  );
+  assert.equal(screen.queryByText(/fixture-must-never-render/), null);
+  fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+  await screen.findByText("db-two");
+  assert.ok(calls[1]!.startsWith("/api/vault/local/inventory?"));
+  assert.equal(screen.queryByText("db-one"), null);
+  fireEvent.click(screen.getByRole("button", { name: "Select db-two" }));
+  assert.deepEqual(selected, {
+    name: "db-two",
+    kind: "secret",
+    version: "v1",
+    enabled: false,
+    expires: 1,
+    purpose: "database",
+  });
+});
+test("list permission denial explains independent grants and invalidated pagination offers restart", async () => {
+  globalThis.fetch = async () =>
+    Response.json({ error: { code: "Forbidden" } }, { status: 403 });
+  const rendered = render(
+    <InventoryPanel
+      connection={inventoryConnection}
+      section="keys"
+      revision={0}
+      onSelect={() => {}}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Load inventory" }));
+  await waitFor(() =>
+    assert.match(
+      screen.getByRole("alert").textContent ?? "",
+      /list permission/,
+    ),
+  );
+  rendered.unmount();
+  let count = 0;
+  globalThis.fetch = async () =>
+    ++count === 1
+      ? Response.json({
+          value: [
+            {
+              kid: "http://127.0.0.1:4000/namespaces/dev/club-a/keys/demo",
+              attributes: { enabled: true },
+            },
+          ],
+          nextLink:
+            "http://127.0.0.1:4000/namespaces/dev/club-a/keys?api-version=2025-07-01&$skiptoken=abc.def",
+        })
+      : Response.json(
+          { error: { code: "PaginationInvalidated" } },
+          { status: 409 },
+        );
+  render(
+    <InventoryPanel
+      connection={inventoryConnection}
+      section="keys"
+      revision={0}
+      onSelect={() => {}}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Load inventory" }));
+  await screen.findByText("demo");
+  fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+  await waitFor(() =>
+    assert.match(
+      screen.getByRole("alert").textContent ?? "",
+      /changed.*reload/i,
+    ),
+  );
+  assert.equal(screen.queryByText("demo"), null);
+  assert.equal(screen.queryByRole("button", { name: "Next page" }), null);
+});
+test("late inventory pages cannot refill the view after filters change", async () => {
+  let resolve!: (r: Response) => void;
+  globalThis.fetch = () =>
+    new Promise<Response>((r) => {
+      resolve = r;
+    });
+  render(
+    <InventoryPanel
+      connection={inventoryConnection}
+      section="keys"
+      revision={0}
+      onSelect={() => {}}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Load inventory" }));
+  fireEvent.change(screen.getByLabelText("Inventory source"), {
+    target: { value: "search" },
+  });
+  await act(async () =>
+    resolve(
+      Response.json({
+        value: [
+          {
+            kid: "http://127.0.0.1:4000/namespaces/dev/club-a/keys/stale",
+            attributes: { enabled: true },
+          },
+        ],
+      }),
+    ),
+  );
+  assert.equal(screen.queryByText("stale"), null);
+});
+test("a successful write refreshes the loaded inventory from its first page", async () => {
+  const calls: string[] = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    return Response.json({
+      value: [
+        {
+          kid: `http://127.0.0.1:4000/namespaces/dev/club-a/keys/${calls.length === 1 ? "before" : "after"}`,
+          attributes: { enabled: true },
+        },
+      ],
+    });
+  };
+  const view = render(
+    <InventoryPanel
+      connection={inventoryConnection}
+      section="keys"
+      revision={0}
+      onSelect={() => {}}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Load inventory" }));
+  await screen.findByText("before");
+  view.rerender(
+    <InventoryPanel
+      connection={inventoryConnection}
+      section="keys"
+      revision={1}
+      onSelect={() => {}}
+    />,
+  );
+  await screen.findByText("after");
+  assert.deepEqual(calls, [
+    "/api/vault/keys?maxresults=25",
+    "/api/vault/keys?maxresults=25",
+  ]);
+  assert.equal(screen.queryByText("before"), null);
+});
+test("list metadata selection does not read a value until the explicit read operation", async () => {
+  const calls: string[] = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    return String(url).includes("local/inventory")
+      ? Response.json({
+          value: [
+            {
+              name: "database",
+              kind: "secret",
+              id: "http://127.0.0.1:4000/namespaces/dev/club-a/secrets/database",
+              version: "v2",
+              versionId:
+                "http://127.0.0.1:4000/namespaces/dev/club-a/secrets/database/v2",
+              attributes: { enabled: true },
+            },
+          ],
+        })
+      : Response.json({ error: { code: "Forbidden" } }, { status: 403 });
+  };
+  render(<VaultConsole />);
+  connect();
+  fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
+  fireEvent.change(screen.getByLabelText("Inventory source"), {
+    target: { value: "search" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Load inventory" }));
+  await screen.findByText("database");
+  fireEvent.click(screen.getByRole("button", { name: "Select database" }));
+  assert.equal(calls.length, 1);
+  assert.equal(
+    (screen.getByLabelText("Version (optional)") as HTMLInputElement).value,
+    "v2",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Run Open secret" }));
+  await waitFor(() =>
+    assert.match(
+      screen.getByRole("alert").textContent ?? "",
+      /does not have permission/,
+    ),
+  );
+  assert.equal(calls[1], "/api/vault/secrets/database/v2");
+});
