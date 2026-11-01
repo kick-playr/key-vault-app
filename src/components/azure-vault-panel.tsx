@@ -46,7 +46,7 @@ export function AzureVaultPanel({
 }: Props) {
   const [rows, setRows] = useState<InventoryRow[]>([]),
     [next, setNext] = useState<string>();
-  const [prefix, setPrefix] = useState(""),
+  const [search, setSearch] = useState(""),
     [nameInput, setNameInput] = useState(""),
     [name, setName] = useState("");
   const [history, setHistory] = useState<VaultVersion[]>([]),
@@ -139,7 +139,7 @@ export function AzureVaultPanel({
       kind: kind === "keys" ? "key" : "secret",
       maxresults: "25",
     });
-    if (prefix) q.set("namePrefix", prefix);
+    if (search) q.set("search", search);
     return "local/inventory?" + q;
   }
   async function inventory(task: Task, path = inventoryPath(), append = false) {
@@ -306,7 +306,9 @@ export function AzureVaultPanel({
               : kind === "keys"
                 ? "Generate key"
                 : "Generate/Import"
-          : name || (kind === "keys" ? "Encryption keys" : "Secrets")}
+          : selected?.tags?.purpose ||
+            name ||
+            (kind === "keys" ? "Encryption keys" : "Secrets")}
       </h2>
       {notice && (
         <p role="status" className="azure-success">
@@ -318,9 +320,11 @@ export function AzureVaultPanel({
           {error}
         </p>
       )}
-      <p role="status" className="muted">
-        {busy ? "Loading…" : ""}
-      </p>
+      {busy && (
+        <p role="status" className="muted">
+          Loading…
+        </p>
+      )}
       {pending && (
         <DiscardDialog
           onStay={() => setPending(undefined)}
@@ -353,7 +357,35 @@ export function AzureVaultPanel({
         />
       ) : (
         <>
-          <div className="azure-toolbar">
+          <div className="azure-resource-toolbar">
+            <form
+              className="azure-search"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setNext(undefined);
+                void refreshList();
+              }}
+            >
+              <label className="azure-search-field">
+                <span className="sr-only">Search by name or purpose</span>
+                <input
+                  type="search"
+                  placeholder="Search name or purpose…"
+                  value={search}
+                  maxLength={512}
+                  onChange={(e) => {
+                    controller.current?.abort();
+                    epoch.current++;
+                    setBusy(false);
+                    setSearch(e.target.value);
+                    setNext(undefined);
+                    setRows([]);
+                  }}
+                />
+              </label>
+              <button disabled={busy}>Search</button>
+            </form>
+
             <button
               onClick={() =>
                 showForm(kind === "keys" ? "create-key" : "create-secret")
@@ -396,51 +428,28 @@ export function AzureVaultPanel({
               </>
             )}
           </div>
-          <form
-            className="azure-toolbar"
-            onSubmit={(e) => {
-              e.preventDefault();
-              setNext(undefined);
-              void refreshList();
-            }}
-          >
-            <label className="field">
-              Search by name prefix
-              <input
-                value={prefix}
-                maxLength={127}
-                pattern="[A-Za-z0-9-]*"
-                onChange={(e) => {
-                  controller.current?.abort();
-                  epoch.current++;
-                  setBusy(false);
-                  setPrefix(e.target.value);
-                  setNext(undefined);
-                  setRows([]);
-                }}
-              />
-            </label>
-            <button disabled={busy}>Search</button>
-          </form>
-          <form
-            className="azure-toolbar"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void loadHistory(nameInput);
-            }}
-          >
-            <label className="field">
-              Open by name
-              <input
-                value={nameInput}
-                required
-                maxLength={127}
-                pattern="[A-Za-z0-9-]{1,127}"
-                onChange={(e) => setNameInput(e.target.value)}
-              />
-            </label>
-            <button disabled={busy}>Open versions</button>
-          </form>
+          <details className="azure-open-by-name">
+            <summary>Open by name…</summary>
+            <form
+              className="azure-open-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void loadHistory(nameInput);
+              }}
+            >
+              <label className="field">
+                Open by name
+                <input
+                  value={nameInput}
+                  required
+                  maxLength={127}
+                  pattern="[A-Za-z0-9-]{1,127}"
+                  onChange={(e) => setNameInput(e.target.value)}
+                />
+              </label>
+              <button disabled={busy}>Open versions</button>
+            </form>
+          </details>
           {history.length > 0 && (
             <div className="azure-history">
               <h3>CURRENT VERSION</h3>
@@ -496,7 +505,7 @@ export function AzureVaultPanel({
           )}
           {!busy && !rows.length && (
             <p className="muted">
-              {prefix
+              {search
                 ? "No matching resources."
                 : "No resources loaded. Create one, refresh, or open by name if list permission is unavailable."}
             </p>
@@ -516,8 +525,13 @@ export function AzureVaultPanel({
                   <tr key={row.name}>
                     <td data-label="Name">
                       <button onClick={() => void loadHistory(row.name)}>
-                        {row.name}
+                        {row.purpose || row.name}
                       </button>
+                      {row.purpose && row.purpose !== row.name && (
+                        <small className="muted azure-resource-id">
+                          {row.name}
+                        </small>
+                      )}
                     </td>
                     <td data-label="Status">
                       {lifecycle({

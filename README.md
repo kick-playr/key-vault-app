@@ -71,3 +71,9 @@ Secrets offers Generate/Import, manual creation or one nonempty UTF-8 text file 
 Dates use explicit UTC controls. Existing epochs outside the browser date-control range are shown as epoch seconds and preserved unchanged. Existing activation/expiry dates can be changed but cannot be cleared with the current API. Use New version to change a value; historical values are never rewritten. Key generation offers RSA 2048/3072 with encrypt/decrypt permissions only. Private key material is not exportable through this API; this does not imply hardware-backed key storage. New key versions do not migrate existing ciphertext.
 
 Dirty input requires Stay/Discard before leaving. A failed request retains the form in memory; success clears the sensitive form and refreshes resource metadata. An ambiguous write failure must be checked with Refresh/version history before another deliberate submission; writes are never automatically retried. “Saved to vault” does not mean running consumers have refreshed. Bulk/snapshot restore, backup, certificates, EC keys, new delete controls and runtime propagation remain outside APP-50.
+
+## Purpose labels/search — 0.1.4 (2026-11-01)
+
+Resource lists show the `purpose` tag as the main name when present, with the physical resource name underneath. Untagged resources keep their physical name. Selection, history and writes still use the physical identifier; no stored resources are renamed. Version detail headings show that version's purpose when present.
+
+Azure-style search now matches a case-insensitive partial name **or** purpose, including spaces/punctuation, across all matching resources before pagination. The fallback Filtered inventory also offers a Name or purpose field; existing exact-name/prefix/purpose filters remain available as additional AND constraints. Requires the API 0.1.4 optional `search` query; update the API first. These commits do not deploy or restart either service.

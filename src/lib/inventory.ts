@@ -21,6 +21,7 @@ const filters = [
   "name",
   "namePrefix",
   "purpose",
+  "search",
   "enabled",
   "expiresBefore",
   "tagName",
@@ -47,6 +48,14 @@ export function inventoryQuery(
   )
     throw Error("Invalid continuation token.");
   if (local) {
+    const search = query.get("search");
+    if (
+      search !== null &&
+      (search.length > 512 || /[\u0000-\u001f\u007f]/.test(search))
+    )
+      throw Error(
+        "Search must be at most 512 characters without control characters.",
+      );
     if (query.has("kind") && !["key", "secret"].includes(query.get("kind")!))
       throw Error("Invalid kind.");
     for (const key of ["name", "namePrefix", "purpose"])

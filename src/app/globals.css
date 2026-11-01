@@ -1058,3 +1058,82 @@ main {
     min-width: 0;
   }
 }
+.azure-resource-id {
+  display: block;
+  overflow-wrap: anywhere;
+  margin: 4px 0 0;
+}
+
+/* Compact resource search; full create/edit forms retain their field spacing. */
+.azure-resource-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.azure-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 240px;
+  max-width: 400px;
+  margin-right: 4px;
+}
+.azure-search-field {
+  flex: 1;
+  min-width: 0;
+}
+.azure-search input {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 14px;
+}
+.azure-resource-toolbar button,
+.azure-open-form button {
+  min-height: 36px;
+  padding: 6px 10px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.azure-resource-toolbar > button:first-of-type {
+  color: white;
+  background: var(--green);
+}
+.azure-open-by-name {
+  font-size: 13px;
+  color: var(--muted);
+}
+.azure-open-by-name summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.azure-open-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  margin-top: 10px;
+  max-width: 500px;
+}
+.azure-open-form .field {
+  flex: 1;
+  min-width: 160px;
+  margin: 0;
+  font-size: 13px;
+  gap: 4px;
+}
+.azure-open-form input {
+  height: 36px;
+  padding: 6px 10px;
+}
+@media (max-width: 560px) {
+  .azure-search {
+    flex-basis: 100%;
+    max-width: none;
+    margin-right: 0;
+  }
+}

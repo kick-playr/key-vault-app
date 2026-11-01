@@ -89,6 +89,7 @@ test("adds two sections without removing fallback and opens history without read
     "Secrets (Azure-style)",
   ])
     assert.ok(screen.getByRole("button", { name }));
+  fireEvent.click(screen.getByText("Open by name…"));
   fireEvent.change(screen.getByLabelText("Open by name"), {
     target: { value: "demo" },
   });
@@ -143,6 +144,7 @@ test("metadata editing uses exact PATCH and no secret read; new value creates a 
         : Response.json(url.endsWith("/versions") ? versions : { value: [] }),
   );
   await secrets();
+  fireEvent.click(screen.getByText("Open by name…"));
   fireEvent.change(screen.getByLabelText("Open by name"), {
     target: { value: "demo" },
   });
@@ -277,6 +279,7 @@ test("a late history response cannot repopulate after disconnect", async () => {
       : Response.json({ value: [] }),
   );
   await secrets();
+  fireEvent.click(screen.getByText("Open by name…"));
   fireEvent.change(screen.getByLabelText("Open by name"), {
     target: { value: "demo" },
   });
@@ -295,6 +298,7 @@ test("denied list access still allows opening a known name", async () => {
   );
   await secrets();
   await screen.findByText(/Permission denied/);
+  fireEvent.click(screen.getByText("Open by name…"));
   fireEvent.change(screen.getByLabelText("Open by name"), {
     target: { value: "demo" },
   });
@@ -319,6 +323,7 @@ test("an existing date cannot be cleared while metadata remains editable", async
   };
   setup(async () => Response.json(dated));
   await secrets();
+  fireEvent.click(screen.getByText("Open by name…"));
   fireEvent.change(screen.getByLabelText("Open by name"), {
     target: { value: "demo" },
   });
@@ -397,6 +402,7 @@ test("opening a create form cancels pending history so late metadata cannot disc
       : Response.json({ value: [] }),
   );
   await secrets();
+  fireEvent.click(screen.getByText("Open by name…"));
   fireEvent.change(screen.getByLabelText("Open by name"), {
     target: { value: "demo" },
   });
@@ -436,6 +442,7 @@ test("metadata dates outside browser date range remain readable and are preserve
         ),
   );
   await secrets();
+  fireEvent.click(screen.getByText("Open by name…"));
   fireEvent.change(screen.getByLabelText("Open by name"), {
     target: { value: "demo" },
   });
@@ -476,5 +483,50 @@ test("discarding through the current section resets its sensitive form too", asy
   assert.equal(
     (screen.getByLabelText("Secret value") as HTMLInputElement).value,
     "",
+  );
+});
+test("shows purpose as name while opening the physical resource and searching either field", async () => {
+  const physical = "hashed-secret";
+  setup(async (url) =>
+    url.endsWith("/versions")
+      ? Response.json({ value: [] })
+      : Response.json({
+          value: [
+            {
+              name: physical,
+              kind: "secret",
+              id: id.replace("/demo/", `/${physical}`),
+              version: "v1",
+              versionId: id.replace("/demo/", `/${physical}/`) + "v1",
+              attributes: { enabled: true },
+              tags: { purpose: "Database password" },
+              purpose: "Database password",
+            },
+          ],
+        }),
+  );
+  await secrets();
+  const button = await screen.findByRole("button", {
+    name: "Database password",
+  });
+  assert.ok(screen.getByText(physical));
+  fireEvent.click(button);
+  await waitFor(() =>
+    assert.ok(
+      calls.some((c) => c.url.endsWith("/secrets/hashed-secret/versions")),
+    ),
+  );
+  fireEvent.change(screen.getByLabelText("Search by name or purpose"), {
+    target: { value: "BASE pass" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
+  await waitFor(() =>
+    assert.ok(
+      calls.some(
+        (c) =>
+          new URL(c.url, "http://localhost").searchParams.get("search") ===
+          "BASE pass",
+      ),
+    ),
   );
 });
