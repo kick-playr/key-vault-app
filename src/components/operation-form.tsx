@@ -230,10 +230,6 @@ export function OperationForm({
           {busy ? "Working…" : operation.label}
           <span aria-hidden="true"> →</span>
         </button>
-        <p className="form-note">
-          Required vault permission: <code>{operation.permission}</code>. The
-          API checks every request.
-        </p>
       </fieldset>
     </form>
   );

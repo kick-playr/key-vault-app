@@ -175,19 +175,9 @@ export function InventoryPanel({
     >
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">NAMESPACE METADATA</p>
           <h2 id="inventory-title">
-            {section === "advanced"
-              ? "Combined inventory"
-              : section === "keys"
-                ? "Key inventory"
-                : "Secret inventory"}
+            {section === "advanced" ? "Inventory" : "Resources"}
           </h2>
-          <p>
-            Latest non-deleted resources, including disabled and expired
-            versions. Requires <code>list</code>; values and key material are
-            excluded.
-          </p>
         </div>
         <span className="permission-badge">list</span>
       </div>
@@ -200,8 +190,9 @@ export function InventoryPanel({
       >
         <div className="inventory-toolbar">
           <label className="field">
-            Inventory source
+            View
             <select
+              aria-label="Inventory source"
               value={source}
               onChange={(event) => {
                 invalidate();
@@ -226,6 +217,12 @@ export function InventoryPanel({
               defaultValue="25"
             />
           </label>
+          <div className="inventory-actions">
+            <button className="button secondary" type="submit" disabled={busy}>
+              {loaded ? <ArrowPathIcon /> : <MagnifyingGlassIcon />}
+              {loaded ? "Refresh" : "Search"}
+            </button>
+          </div>
         </div>
         {source === "search" && (
           <div className="inventory-filters">
@@ -286,16 +283,6 @@ export function InventoryPanel({
             </label>
           </div>
         )}
-        <div className="inventory-actions">
-          <button className="button secondary" type="submit" disabled={busy}>
-            {source === "search" ? <MagnifyingGlassIcon /> : <ArrowPathIcon />}
-            {loaded || error ? "Reload inventory" : "Load inventory"}
-          </button>
-          <span className="form-note">
-            Search stays inside {connection.environment} / {connection.tenant}.
-            Filters are metadata, not secret values.
-          </span>
-        </div>
       </form>
       <div
         ref={status}
@@ -310,9 +297,6 @@ export function InventoryPanel({
           </p>
         )}
         {notice && <p>{notice}</p>}
-        {!loaded && !busy && !error && (
-          <p>Load the inventory to discover resources in this namespace.</p>
-        )}
       </div>
       {loaded && rows.length === 0 && (
         <p className="inventory-empty">No resources match these filters.</p>
@@ -397,10 +381,6 @@ export function InventoryPanel({
           </button>
         </div>
       )}
-      <p className="form-note">
-        Selecting metadata fills the operation form. Reading values and changing
-        resources still require their own permissions.
-      </p>
     </section>
   );
 }

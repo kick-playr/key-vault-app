@@ -8,7 +8,6 @@ import {
   ArrowRightOnRectangleIcon,
   EyeIcon,
   EyeSlashIcon,
-  ServerStackIcon,
 } from "@heroicons/react/24/outline";
 import {
   buildOperation,
@@ -26,7 +25,6 @@ const environments = [
   { value: "production", label: "Production" },
 ] as const;
 type Connection = { environment: string; tenant: string; token: string };
-type Resource = { name: string; section: "keys" | "secrets" };
 const messages: Record<number, string> = {
   400: "The API rejected the request. Check the fields and manifest.",
   401: "Your session or vault token is invalid. Disconnect and sign in again.",
@@ -46,7 +44,6 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
   const [operationId, setOperationId] = useState("key-read");
   const [lastReconcile, setLastReconcile] = useState<Fields | null>(null);
   const [pendingVersion, setPendingVersion] = useState("");
-  const [resources, setResources] = useState<Resource[]>([]);
   const [selectedName, setSelectedName] = useState("");
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [revealed, setRevealed] = useState(false);
@@ -75,7 +72,6 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
   function disconnect() {
     clearOperation();
     setConnection(null);
-    setResources([]);
     setSelectedName("");
   }
   useEffect(
@@ -92,7 +88,6 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
       setResult(null);
       setRevealed(false);
       setConnection(null);
-      setResources([]);
       setLastReconcile(null);
       setConnecting(false);
     };
@@ -233,17 +228,6 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
       if (operationRequest.method !== "GET") setInventoryRevision((v) => v + 1);
       if (section !== "advanced") {
         setSelectedName(fields.name ?? "");
-        setResources((previous) => {
-          const rest = previous.filter(
-            (item) => item.section !== section || item.name !== fields.name,
-          );
-          return operationId.endsWith("-delete")
-            ? rest
-            : [
-                { name: fields.name!, section: section as "keys" | "secrets" },
-                ...rest,
-              ].slice(0, 100);
-        });
       }
     } catch (e) {
       if (current === sequence.current && !controller.signal.aborted)
@@ -273,14 +257,6 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
             KICK PLAYR<small>Platform tools</small>
           </span>
         </a>
-        <div className="sidebar-label">WORKSPACE</div>
-        <div className="workspace">
-          <ServerStackIcon />
-          <span>
-            Key Vault<small>Local provider</small>
-          </span>
-          <span className="live-dot" />
-        </div>
         <nav aria-label="Vault sections">
           {(
             [
@@ -297,60 +273,46 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
             >
               <Icon />
               {label}
-              <span aria-hidden="true">
-                {id === "advanced"
-                  ? "↗"
-                  : resources.filter((r) => r.section === id).length}
-              </span>
             </button>
           ))}
         </nav>
         <div className="sidebar-bottom">
           <ShieldCheckIcon />
-          <strong>Scoped by design</strong>
-          <p>
-            Every operation is authorized by the vault for one environment and
-            namespace.
-          </p>
-          <span className="provider-badge">LOCAL API · 2025-07-01</span>
+          <span>Local provider</span>
         </div>
       </aside>
       <div className="main-shell">
         <header className="topbar">
-          <span>
-            Platform <span className="slash">/</span> Key Vault
-          </span>
-          <div className="topbar-right">
-            <span className="local-badge">
+          <span className="breadcrumbs">Key Vault</span>
+          {connection && (
+            <div
+              className="topbar-context"
+              role="group"
+              aria-label="Active vault context"
+            >
               <span className="live-dot" />
-              Local development
-            </span>
-            {account}
-          </div>
+              <span className="namespace-label">
+                <strong>{connection.environment}</strong>
+                <span className="slash">/</span>
+                {connection.tenant}
+              </span>
+              <button className="text-button" onClick={disconnect}>
+                <ArrowRightOnRectangleIcon />
+                Disconnect
+              </button>
+            </div>
+          )}
+          {account && <div className="topbar-right">{account}</div>}
         </header>
         <main id="main-content">
           <div className="page-heading">
-            <div>
-              <p className="eyebrow">VAULT MANAGEMENT</p>
-              <h1>
-                {section === "keys"
-                  ? "Keys"
-                  : section === "secrets"
-                    ? "Secrets"
-                    : "Advanced operations"}
-              </h1>
-              <p className="subtitle">
-                {section === "keys"
-                  ? "Manage encryption keys and their lifecycle."
-                  : section === "secrets"
-                    ? "Manage secret values, versions and metadata."
-                    : "Provision manifests and inspect runtime mappings."}
-              </p>
-            </div>
-            <span className="outline-badge">
-              <ShieldCheckIcon />
-              Private key material never leaves the vault
-            </span>
+            <h1>
+              {section === "keys"
+                ? "Keys"
+                : section === "secrets"
+                  ? "Secrets"
+                  : "Advanced"}
+            </h1>
           </div>
           {!connection ? (
             <section
@@ -363,10 +325,7 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
                 </span>
                 <div>
                   <h2 id="connect-title">Connect to a namespace</h2>
-                  <p>
-                    Sign-in identifies you. A scoped vault token authorizes your
-                    operations.
-                  </p>
+                  <p>Enter your scoped vault credentials.</p>
                 </div>
               </div>
               <form
@@ -452,21 +411,6 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
             </section>
           ) : (
             <>
-              <section
-                className="context-bar"
-                aria-label="Active vault context"
-              >
-                <div>
-                  <span className="live-dot" />
-                  <strong>{connection.environment}</strong>
-                  <span className="slash">/</span>
-                  <span>{connection.tenant}</span>
-                </div>
-                <button className="text-button" onClick={disconnect}>
-                  <ArrowRightOnRectangleIcon />
-                  Disconnect
-                </button>
-              </section>
               <InventoryPanel
                 key={`${connection.environment}/${connection.tenant}/${section}`}
                 connection={connection}
@@ -492,12 +436,11 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
                 <section className="panel operation-panel">
                   <div className="panel-heading">
                     <div>
-                      <p className="eyebrow">
+                      <h2>
                         {section === "advanced"
-                          ? "PROVISIONING"
-                          : "RESOURCE OPERATIONS"}
-                      </p>
-                      <h2>{operation.label}</h2>
+                          ? "Manifest operations"
+                          : "Actions"}
+                      </h2>
                     </div>
                     <span className="permission-badge">
                       {operation.permission}
@@ -521,11 +464,13 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
                         ))}
                     </select>
                   </label>
-                  {!operationId.endsWith("-delete") && (
-                    <p className="operation-description">
-                      {operation.description}
-                    </p>
-                  )}
+                  {!operationId.endsWith("-delete") &&
+                    !operationId.endsWith("-read") &&
+                    !operationId.endsWith("-versions") && (
+                      <p className="operation-description">
+                        {operation.description}
+                      </p>
+                    )}
                   <OperationForm
                     key={`${operationId}-${formEpoch}`}
                     operation={operation}
@@ -578,21 +523,14 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
                         </div>
                       )}
                       {!busy && !result && !error && (
-                        <div className="empty-state">
-                          <CommandLineIcon />
-                          <h3>Ready when you are</h3>
-                          <p>Run an operation to see its response here.</p>
-                        </div>
+                        <p className="empty-state">No result yet.</p>
                       )}
                     </div>
                     {result && (
                       <>
                         <div className="sensitive-notice">
                           <LockClosedIcon />
-                          <p>
-                            Responses may contain sensitive values. Reveal only
-                            when needed.
-                          </p>
+                          <p>Sensitive result. Reveal only when needed.</p>
                         </div>
                         <button
                           className="button secondary reveal-button"
@@ -653,71 +591,20 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
                       </>
                     )}
                   </section>
-                  {section !== "advanced" && (
-                    <section className="panel session-panel">
-                      <div className="panel-heading">
-                        <h2>Opened this session</h2>
-                        <span className="count">
-                          {
-                            resources.filter((r) => r.section === section)
-                              .length
-                          }
-                        </span>
-                      </div>
-                      <p className="form-note">
-                        A session history, not a complete vault inventory.
-                      </p>
-                      {resources.filter((r) => r.section === section).length ===
-                      0 ? (
-                        <p className="session-empty">
-                          Open or create a resource to add it here.
-                        </p>
-                      ) : (
-                        <ul className="resource-list">
-                          {resources
-                            .filter((r) => r.section === section)
-                            .map((r) => (
-                              <li key={r.name}>
-                                <button
-                                  onClick={() => {
-                                    clearOperation();
-                                    setSelectedName(r.name);
-                                    setOperationId(
-                                      section === "keys"
-                                        ? "key-read"
-                                        : "secret-read",
-                                    );
-                                  }}
-                                >
-                                  <KeyIcon />
-                                  <span>{r.name}</span>
-                                  <span aria-hidden="true">↗</span>
-                                </button>
-                              </li>
-                            ))}
-                        </ul>
-                      )}
-                    </section>
-                  )}
                 </div>
               </div>
             </>
           )}
-          <section className="capabilities">
-            <ShieldCheckIcon />
-            <div>
-              <h3>Know your provider</h3>
+          {section === "advanced" && (
+            <details className="provider-info">
+              <summary>Provider limits</summary>
               <p>
-                RSA 2048 / 3072 · RSA-OAEP-256 · Versioned secrets · Manifest
-                provisioning. No recovery, certificates, private-key export,
-                migration jobs or grant-management API. Deletions are permanent.
+                RSA 2048 / 3072 · RSA-OAEP-256 · Versioned secrets. No recovery,
+                certificates, private-key export, migration jobs or
+                grant-management API. Deletions are permanent.
               </p>
-            </div>
-          </section>
-          <footer>
-            Kick Playr <span> / </span> Key Vault <span>·</span> Independent
-            administration
-          </footer>
+            </details>
+          )}
         </main>
       </div>
     </div>

@@ -276,7 +276,7 @@ test("inventory search filters, pagination and exact-version selection stay scop
   fireEvent.change(screen.getByLabelText("Page size"), {
     target: { value: "1" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Load inventory" }));
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
   await screen.findByText("db-one");
   assert.match(calls[0]!, /^\/api\/vault\/local\/inventory\?/);
   assert.equal(
@@ -309,7 +309,7 @@ test("list permission denial explains independent grants and invalidated paginat
       onSelect={() => {}}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "Load inventory" }));
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
   await waitFor(() =>
     assert.match(
       screen.getByRole("alert").textContent ?? "",
@@ -342,7 +342,7 @@ test("list permission denial explains independent grants and invalidated paginat
       onSelect={() => {}}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "Load inventory" }));
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
   await screen.findByText("demo");
   fireEvent.click(screen.getByRole("button", { name: "Next page" }));
   await waitFor(() =>
@@ -368,7 +368,7 @@ test("late inventory pages cannot refill the view after filters change", async (
       onSelect={() => {}}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "Load inventory" }));
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
   fireEvent.change(screen.getByLabelText("Inventory source"), {
     target: { value: "search" },
   });
@@ -407,7 +407,7 @@ test("a successful write refreshes the loaded inventory from its first page", as
       onSelect={() => {}}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "Load inventory" }));
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
   await screen.findByText("before");
   view.rerender(
     <InventoryPanel
@@ -450,7 +450,7 @@ test("list metadata selection does not read a value until the explicit read oper
   fireEvent.change(screen.getByLabelText("Inventory source"), {
     target: { value: "search" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Load inventory" }));
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
   await screen.findByText("database");
   fireEvent.click(screen.getByRole("button", { name: "Select database" }));
   assert.equal(calls.length, 1);
@@ -624,4 +624,39 @@ test("a revoked token clears the authenticated console and any revealed result",
     (screen.getByLabelText("Vault bearer token") as HTMLInputElement).value,
     "",
   );
+});
+test("connected namespace and disconnect live once in the top bar", async () => {
+  globalThis.fetch = async () => Response.json({});
+  render(<VaultConsole />);
+  await connect();
+  const header = screen.getByRole("banner");
+  assert.ok(header.querySelector('[aria-label="Active vault context"]'));
+  assert.equal(header.querySelectorAll("button").length, 1);
+  assert.match(header.textContent ?? "", /development.*club-a/);
+  assert.equal(screen.getAllByRole("button", { name: "Disconnect" }).length, 1);
+  assert.equal(
+    screen
+      .getByRole("main")
+      .querySelector('[aria-label="Active vault context"]'),
+    null,
+  );
+});
+
+test("inventory action changes from Search to Refresh and resets when filters change", async () => {
+  globalThis.fetch = async () => Response.json({ value: [] });
+  render(
+    <InventoryPanel
+      connection={inventoryConnection}
+      section="keys"
+      revision={0}
+      onSelect={() => {}}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
+  await screen.findByRole("button", { name: "Refresh" });
+  fireEvent.change(screen.getByLabelText("Inventory source"), {
+    target: { value: "search" },
+  });
+  assert.ok(screen.getByRole("button", { name: "Search" }));
+  assert.equal(screen.queryByRole("button", { name: "Refresh" }), null);
 });

@@ -29,7 +29,7 @@ The browser uses `x-vault-token` to keep the vault credential separate from Cler
 
 ## API limitations affecting the interface
 
-- The current API working tree implements paginated key/secret lists and combined metadata search. These require an explicit `list` grant, independent of read/write/crypto. Open-by-name and session history remain available as fallback workflows. Inventory pages describe the latest versions, including disabled/expired resources, and omit deleted objects, values and key material.
+- The current API working tree implements paginated key/secret lists and combined metadata search. These require an explicit `list` grant, independent of read/write/crypto. Open-by-name remains available as a fallback workflow. Inventory pages describe the latest versions, including disabled/expired resources, and omit deleted objects, values and key material.
 - List/search page sizes are 1–25. Cursors expire after 15 minutes and bind scope, endpoint, filters, page size and namespace generation. `PaginationInvalidated` (409) or `InvalidContinuationToken` (400) requires restarting from the first page. The UI never fetches an arbitrary nextLink origin; it validates scope/path/query and calls its own fixed-upstream route.
 - No namespace, environment, grant, credential or provider management endpoints. Connection inputs supply explicit namespace context; grant configuration remains server bootstrap configuration. Never expose the master key or MongoDB credentials.
 - No provider-discovery endpoint. Describe only this local API's implemented capabilities. APP-36 integration remains conditional on an actual contract.
