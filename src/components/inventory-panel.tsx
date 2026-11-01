@@ -17,11 +17,13 @@ export function InventoryPanel({
   section,
   revision,
   onSelect,
+  onUnauthorized,
 }: {
   connection: { environment: string; tenant: string; token: string };
   section: Section;
   revision: number;
   onSelect: (row: InventoryRow) => void;
+  onUnauthorized?: () => void;
 }) {
   const [source, setSource] = useState(
     section === "advanced" ? "search" : "list",
@@ -99,10 +101,12 @@ export function InventoryPanel({
           throw Error(
             "Inventory needs the separate list permission for this namespace. Read, write and crypto do not imply list. You can still use open-by-name below with an appropriate grant.",
           );
-        if (response.status === 401)
+        if (response.status === 401) {
+          onUnauthorized?.();
           throw Error(
             "Sign-in or vault token is invalid. Reconnect before listing.",
           );
+        }
         if (response.status === 409)
           throw Error(
             "The vault changed while paging. Reload inventory to start a fresh snapshot.",

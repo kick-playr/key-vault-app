@@ -13,13 +13,13 @@ cp env.example .env.local
 npm run dev
 ```
 
-Open [http://127.0.0.1:3003](http://127.0.0.1:3003). Configure Clerk to allow that local sign-in/redirect origin. Use `127.0.0.1`, not `localhost`: the vault integration is intentionally loopback-only. Without Clerk keys the home page displays setup instructions and vault routes return 503. There is no authentication bypass.
+Open [http://localhost:4001](http://localhost:4001). Configure Clerk to allow that local sign-in/redirect origin. The UI binds to localhost; its request boundary permits localhost and 127.0.0.1 only, with matching Host and Origin. The vault API upstream remains http://127.0.0.1:4000. Without Clerk keys the home page displays setup instructions and vault routes return 503. There is no authentication bypass.
 
-After signing in, enter your environment, tenant/namespace and an existing vault grant token. Use `_shared` for process-scoped manifests. Clerk identifies the user; the scoped vault token independently authorizes API operations. The application does not mint grants or translate Clerk identities into automatic vault privileges. Obtain a grant with only the list/read/write/crypto permissions needed from your vault administrator.
+After signing in, choose Development, Test, Preview or Production (the Kickstarter identifiers `development`, `test`, `preview`, `production`), then enter your tenant/namespace and an existing vault grant token. The token must authorize the selected environment; `development` is not an alias for `dev`. Connect first calls `GET /local/session` through the authenticated server proxy and opens the console only after the API confirms the exact token and namespace. Tokens with appended text are rejected; syntax validation alone never establishes a connection. Update and restart the vault API as well as the UI when installing this change. Use `_shared` for process-scoped manifests. Clerk identifies the user; the scoped vault token independently authorizes API operations. The application does not mint grants or translate Clerk identities into automatic vault privileges. Obtain a grant with only the list/read/write/crypto permissions needed from your vault administrator.
 
 `VAULT_API_ORIGIN` is configured only on the server and defaults to `http://127.0.0.1:4000`. It must be a loopback HTTP origin without credentials, paths or query parameters. The UI never reads the vault master key, MongoDB credentials or the API's bootstrap grants file.
 
-If port 3003 is occupied, run `node node_modules/next/dist/bin/next dev --hostname 127.0.0.1 -p 3013` and allow that origin in Clerk. Production mode is `npm run build` then `npm start`, still bound to loopback. This implementation has not been deployed.
+Both `npm run dev` and `npm start` use port 4001. If it is occupied, stop the existing listener before starting the app. Production mode is `npm run build` then `npm start`, still bound to loopback. This implementation has not been deployed.
 
 ## Supported workflows
 

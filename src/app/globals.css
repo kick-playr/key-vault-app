@@ -8,6 +8,8 @@
   --surface: #fff;
   --danger: #a52c38;
   font-family: Arial, Helvetica, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
   color: var(--ink);
   background: var(--canvas);
   font-synthesis: none;
@@ -63,18 +65,18 @@ p {
   margin: 0;
 }
 h1 {
-  font-size: 36px;
+  font-size: 40px;
   font-weight: 650;
   letter-spacing: -1.3px;
   line-height: 1.2;
 }
 h2 {
-  font-size: 17px;
+  font-size: 21px;
   font-weight: 650;
   letter-spacing: -0.25px;
 }
 h3 {
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 600;
 }
 code,
@@ -111,6 +113,7 @@ button:hover {
   min-height: 100vh;
 }
 .sidebar {
+  overflow-y: auto;
   width: 242px;
   background: #112c29;
   color: #ccdad5;
@@ -127,7 +130,7 @@ button:hover {
   gap: 12px;
   color: #fff;
   padding: 0 10px;
-  font-size: 13px;
+  font-size: 17px;
   font-weight: 700;
   letter-spacing: 1.8px;
 }
@@ -146,14 +149,14 @@ button:hover {
 }
 .brand small {
   display: block;
-  font-size: 11px;
+  font-size: 14px;
   letter-spacing: 0.4px;
   font-weight: 400;
   margin-top: 6px;
   color: #91a69f;
 }
 .sidebar-label {
-  font-size: 10px;
+  font-size: 13px;
   letter-spacing: 1.6px;
   font-weight: 600;
   color: #8ca69c;
@@ -168,14 +171,14 @@ button:hover {
   border: 1px solid #35524b;
   border-radius: 8px;
   color: #ecf4f0;
-  font-size: 13px;
+  font-size: 17px;
 }
 .workspace > span:nth-child(2) {
   flex: 1;
 }
 .workspace small {
   display: block;
-  font-size: 11px;
+  font-size: 14px;
   color: #a1b6ad;
   margin-top: 5px;
 }
@@ -205,7 +208,7 @@ button:hover {
   border-radius: 7px;
   background: transparent;
   color: #bccfc5;
-  font-size: 13px;
+  font-size: 17px;
 }
 .nav-item.active {
   background: #24473e;
@@ -217,7 +220,7 @@ button:hover {
 }
 .nav-item > span {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 14px;
   color: #b6cfbf;
 }
 .sidebar-bottom {
@@ -232,16 +235,16 @@ button:hover {
 .sidebar-bottom strong {
   display: block;
   color: #d7e6de;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 500;
 }
 .sidebar-bottom p {
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.8;
   margin: 9px 0 21px;
 }
 .provider-badge {
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.9px;
   color: #b4c9bd;
   border-top: 1px solid #345048;
@@ -261,7 +264,7 @@ button:hover {
   justify-content: space-between;
   padding: 0 44px;
   background: #fff;
-  font-size: 12px;
+  font-size: 16px;
   color: var(--muted);
 }
 .topbar-right {
@@ -280,7 +283,7 @@ button:hover {
   border: 1px solid var(--line);
   border-radius: 5px;
   padding: 7px 10px;
-  font-size: 10px;
+  font-size: 13px;
   color: #4b675d;
 }
 .local-badge .live-dot {
@@ -300,14 +303,14 @@ main {
   margin-bottom: 30px;
 }
 .eyebrow {
-  font-size: 10px;
+  font-size: 13px;
   letter-spacing: 1.6px;
   color: #6b7e77;
   font-weight: 600;
   margin-bottom: 12px;
 }
 .subtitle {
-  font-size: 13px;
+  font-size: 17px;
   color: var(--muted);
   margin-top: 12px;
   line-height: 1.7;
@@ -316,7 +319,7 @@ main {
   display: flex;
   gap: 7px;
   align-items: center;
-  font-size: 10px;
+  font-size: 13px;
   color: #587369;
   max-width: 210px;
   line-height: 1.6;
@@ -344,7 +347,7 @@ main {
   margin-bottom: 10px;
 }
 .panel-heading p:not(.eyebrow) {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--muted);
   line-height: 1.7;
   margin-top: 8px;
@@ -376,7 +379,7 @@ main {
   background: #eff5f1;
   border-radius: 8px;
   margin-bottom: 24px;
-  font-size: 12px;
+  font-size: 16px;
 }
 .context-bar > div {
   display: flex;
@@ -397,7 +400,7 @@ main {
   border: 0;
   background: transparent;
   color: var(--green);
-  font-size: 11px;
+  font-size: 14px;
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -419,7 +422,7 @@ main {
 }
 .permission-badge {
   font-family: ui-monospace, monospace;
-  font-size: 10px;
+  font-size: 13px;
   color: #52645d;
   padding: 5px 9px;
   background: #f1f5f3;
@@ -428,7 +431,7 @@ main {
   white-space: nowrap;
 }
 .field {
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 600;
   display: flex;
   flex-direction: column;
@@ -443,7 +446,7 @@ main {
   border: 1px solid #d7e0dc;
   border-radius: 5px;
   padding: 11px 12px;
-  font-size: 12px;
+  font-size: 16px;
   color: #203f32;
   background: #fff;
   min-width: 0;
@@ -461,7 +464,7 @@ main {
 }
 .field textarea {
   resize: vertical;
-  font-size: 11px;
+  font-size: 14px;
 }
 .field-grid {
   display: grid;
@@ -469,7 +472,7 @@ main {
   gap: 0 16px;
 }
 .operation-description {
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.8;
   color: var(--muted);
   margin: 0 0 24px;
@@ -488,7 +491,7 @@ main {
   justify-content: center;
   gap: 12px;
   padding: 11px 16px;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 500;
   line-height: 1.4;
 }
@@ -514,7 +517,7 @@ main {
   height: 16px;
 }
 .form-note {
-  font-size: 10px;
+  font-size: 13px;
   line-height: 1.8;
   color: #718178;
   margin-top: 14px;
@@ -546,7 +549,7 @@ main {
   outline-offset: 4px;
 }
 .result-status p {
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.8;
 }
 .empty-state {
@@ -562,12 +565,12 @@ main {
 }
 .empty-state h3 {
   color: #456354;
-  font-size: 13px;
+  font-size: 17px;
   margin-bottom: 8px;
   font-weight: 500;
 }
 .empty-state p {
-  font-size: 11px;
+  font-size: 14px;
 }
 .sensitive-notice {
   display: flex;
@@ -581,7 +584,7 @@ main {
   height: 15px;
 }
 .sensitive-notice p {
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.7;
 }
 .masked-result {
@@ -595,7 +598,7 @@ main {
   text-align: center;
 }
 .json-result {
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.8;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -615,7 +618,7 @@ main {
   border: 1px solid #f0d4d6;
   border-radius: 5px;
   padding: 12px;
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.7;
   margin-bottom: 15px;
 }
@@ -626,7 +629,7 @@ main {
   border-radius: 6px;
   margin-bottom: 20px;
   color: #8a2930;
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.8;
 }
 .danger-box p {
@@ -636,7 +639,7 @@ main {
   margin-bottom: 0;
 }
 .count {
-  font-size: 11px;
+  font-size: 14px;
   color: #6b7e73;
   background: #f0f5f2;
   border: 1px solid #e3ebe6;
@@ -650,7 +653,7 @@ main {
   margin-top: 0;
 }
 .session-empty {
-  font-size: 11px;
+  font-size: 14px;
   color: #7c8c83;
   padding: 20px 0 4px;
 }
@@ -670,7 +673,7 @@ main {
   border-top: 1px solid #edf1ee;
   padding: 13px 0;
   color: #355642;
-  font-size: 12px;
+  font-size: 16px;
   text-align: left;
 }
 .resource-list button span:nth-child(2) {
@@ -696,7 +699,7 @@ main {
 .versions code {
   overflow-wrap: anywhere;
   min-width: 0;
-  font-size: 10px;
+  font-size: 13px;
 }
 .capabilities {
   display: flex;
@@ -715,18 +718,18 @@ main {
   margin-top: 1px;
 }
 .capabilities h3 {
-  font-size: 11px;
+  font-size: 14px;
   margin-bottom: 7px;
 }
 .capabilities p {
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.8;
   color: #6b7d71;
 }
 footer {
   margin-top: 30px;
   padding: 10px 0;
-  font-size: 10px;
+  font-size: 13px;
   color: #8b9991;
 }
 footer span {
@@ -748,7 +751,7 @@ footer span {
 }
 .setup-card p:not(.eyebrow) {
   line-height: 1.8;
-  font-size: 14px;
+  font-size: 18px;
   margin-top: 20px;
   color: var(--muted);
 }
@@ -802,7 +805,7 @@ footer span {
   }
   .brand {
     gap: 8px;
-    font-size: 11px;
+    font-size: 14px;
     padding: 0 4px;
     letter-spacing: 1px;
   }
@@ -832,7 +835,7 @@ footer span {
     margin-bottom: 24px;
   }
   h1 {
-    font-size: 30px;
+    font-size: 34px;
   }
   .right-column {
     gap: 16px;
@@ -851,7 +854,7 @@ footer span {
     padding: 18px 18px 12px;
   }
   .brand {
-    font-size: 12px;
+    font-size: 16px;
   }
   .brand-mark {
     height: 32px;
@@ -871,7 +874,7 @@ footer span {
   }
   .nav-item {
     flex: 1;
-    font-size: 12px;
+    font-size: 16px;
     gap: 7px;
     padding: 11px 9px;
     justify-content: center;
@@ -892,10 +895,10 @@ footer span {
   .topbar {
     height: 55px;
     padding: 0 20px;
-    font-size: 11px;
+    font-size: 14px;
   }
   .local-badge {
-    font-size: 9px;
+    font-size: 12px;
     padding: 5px 7px;
   }
   .topbar-right {
@@ -905,10 +908,10 @@ footer span {
     padding: 26px 18px 16px;
   }
   .eyebrow {
-    font-size: 9px;
+    font-size: 12px;
   }
   .subtitle {
-    font-size: 12px;
+    font-size: 16px;
   }
   .panel {
     padding: 20px;
@@ -924,21 +927,21 @@ footer span {
     padding: 10px;
   }
   .panel-heading h2 {
-    font-size: 16px;
+    font-size: 20px;
   }
   .field-grid {
     grid-template-columns: 1fr;
   }
   .context-bar {
     padding: 13px;
-    font-size: 11px;
+    font-size: 14px;
     gap: 8px;
   }
   .context-bar > div {
     flex-wrap: wrap;
   }
   .text-button {
-    font-size: 10px;
+    font-size: 13px;
   }
   .capabilities {
     padding: 16px;
@@ -947,7 +950,7 @@ footer span {
     padding: 28px;
   }
   .setup-card h1 {
-    font-size: 28px;
+    font-size: 32px;
   }
   footer {
     line-height: 1.8;
@@ -963,7 +966,7 @@ footer span {
   display: flex;
   gap: 8px;
   align-items: center;
-  font-size: 11px;
+  font-size: 14px;
   color: #3b5147;
   margin: -6px 0 18px;
 }
@@ -998,7 +1001,7 @@ footer span {
   margin: 0;
 }
 .inventory-status {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--muted);
   line-height: 1.8;
   margin-top: 18px;
@@ -1009,7 +1012,7 @@ footer span {
 .inventory-empty {
   padding: 24px;
   text-align: center;
-  font-size: 12px;
+  font-size: 16px;
   color: var(--muted);
 }
 .inventory-table-scroll {
@@ -1022,11 +1025,11 @@ footer span {
   min-width: 500px;
   width: 100%;
   text-align: left;
-  font-size: 12px;
+  font-size: 16px;
   table-layout: fixed;
 }
 .inventory-panel th {
-  font-size: 10px;
+  font-size: 13px;
   letter-spacing: 0.7px;
   text-transform: uppercase;
   font-weight: 600;
@@ -1052,23 +1055,23 @@ footer span {
 .inventory-panel small {
   display: block;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 13px;
   line-height: 1.8;
   margin-top: 4px;
 }
 .inventory-panel summary {
   cursor: pointer;
-  font-size: 10px;
+  font-size: 13px;
   color: var(--green);
   padding: 5px 0;
 }
 .inventory-panel details pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 10px;
+  font-size: 13px;
 }
 .inventory-kind {
-  font-size: 10px;
+  font-size: 13px;
   color: #42614f;
   background: #edf4ef;
   padding: 3px 7px;
@@ -1080,7 +1083,7 @@ footer span {
   align-items: center;
   gap: 12px;
   margin-top: 18px;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--muted);
 }
 @media (max-width: 1100px) {

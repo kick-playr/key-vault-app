@@ -22,7 +22,11 @@ function failure(status: number, code: string) {
 }
 export function supportedRoute(method: string, path: string[]) {
   const [kind, name, version, action] = path;
-  if (kind === "local" && path.length === 2 && name === "inventory")
+  if (
+    kind === "local" &&
+    path.length === 2 &&
+    ["inventory", "session"].includes(name ?? "")
+  )
     return method === "GET";
   if (["keys", "secrets"].includes(kind ?? "") && path.length === 1)
     return method === "GET";
@@ -94,7 +98,7 @@ export async function forwardVault(
   const url = new URL(request.url);
   if (
     url.protocol !== "http:" ||
-    url.hostname !== "127.0.0.1" ||
+    !["127.0.0.1", "localhost"].includes(url.hostname) ||
     (request.headers.get("host") && request.headers.get("host") !== url.host)
   )
     return failure(403, "Forbidden");

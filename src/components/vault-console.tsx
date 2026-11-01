@@ -19,6 +19,12 @@ import {
 import { OperationForm } from "./operation-form";
 import { InventoryPanel } from "./inventory-panel";
 import type { InventoryRow } from "../lib/inventory";
+const environments = [
+  { value: "development", label: "Development" },
+  { value: "test", label: "Test" },
+  { value: "preview", label: "Preview" },
+  { value: "production", label: "Production" },
+] as const;
 type Connection = { environment: string; tenant: string; token: string };
 type Resource = { name: string; section: "keys" | "secrets" };
 const messages: Record<number, string> = {
@@ -34,6 +40,7 @@ const messages: Record<number, string> = {
 };
 export function VaultConsole({ account }: { account?: React.ReactNode }) {
   const [inventoryRevision, setInventoryRevision] = useState(0);
+  const [connecting, setConnecting] = useState(false);
   const [connection, setConnection] = useState<Connection | null>(null);
   const [section, setSection] = useState<Section>("keys");
   const [operationId, setOperationId] = useState("key-read");
@@ -58,6 +65,7 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
     request.current?.abort();
     request.current = null;
     setBusy(false);
+    setConnecting(false);
     setResult(null);
     setRevealed(false);
     setMessage("");
@@ -86,6 +94,7 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
       setConnection(null);
       setResources([]);
       setLastReconcile(null);
+      setConnecting(false);
     };
     window.addEventListener("pagehide", clear);
     return () => window.removeEventListener("pagehide", clear);
@@ -101,6 +110,80 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
           ? "key-read"
           : "secret-read",
     );
+  }
+  async function connectToNamespace(form: HTMLFormElement) {
+    const f = new FormData(form);
+    const environment = String(f.get("environment") ?? "");
+    const tenant = String(f.get("tenant") ?? "");
+    const token = String(f.get("token") ?? "");
+    if (
+      !environments.some((option) => option.value === environment) ||
+      !/^[A-Za-z0-9_-]{1,64}$/.test(tenant) ||
+      !/^[\x21-\x7e]{32,4096}$/.test(token)
+    ) {
+      setError("Enter a valid environment, tenant and vault token.");
+      return;
+    }
+    clearOperation();
+    const current = sequence.current;
+    const controller = new AbortController();
+    request.current = controller;
+    setConnecting(true);
+    const tokenField = form.querySelector<HTMLInputElement>(
+      'input[name="token"]',
+    );
+    if (tokenField) tokenField.value = "";
+    try {
+      const response = await fetch("/api/vault/local/session", {
+        headers: {
+          "x-vault-token": token,
+          "x-vault-environment": environment,
+          "x-vault-tenant": tenant,
+        },
+        cache: "no-store",
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]),
+      });
+      if (current !== sequence.current) return;
+      if (!response.ok) {
+        setError(
+          response.status === 401
+            ? "Invalid vault token or sign-in session. Use the exact token."
+            : response.status === 403
+              ? "This token is not authorized for the selected environment and namespace."
+              : "Vault authentication is unavailable. Update and restart the vault API, then retry.",
+        );
+        return;
+      }
+      const proof: unknown = await response.json();
+      if (current !== sequence.current) return;
+      if (
+        !proof ||
+        typeof proof !== "object" ||
+        !("authenticated" in proof) ||
+        proof.authenticated !== true ||
+        !("environment" in proof) ||
+        proof.environment !== environment ||
+        !("tenant" in proof) ||
+        proof.tenant !== tenant
+      ) {
+        setError(
+          "Vault authentication returned an invalid response. Connection refused.",
+        );
+        return;
+      }
+      setConnection({ environment, tenant, token });
+      form.reset();
+    } catch {
+      if (current === sequence.current && !controller.signal.aborted)
+        setError(
+          "Vault authentication failed or timed out. Connection refused.",
+        );
+    } finally {
+      if (current === sequence.current) {
+        setConnecting(false);
+        request.current = null;
+      }
+    }
   }
   async function run(fields: Fields) {
     if (!connection) return;
@@ -129,6 +212,13 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
         cache: "no-store",
       });
       if (current !== sequence.current) return;
+      if (response.status === 401) {
+        disconnect();
+        setError(
+          "Vault authentication expired or was revoked. Reconnect with a valid token.",
+        );
+        return;
+      }
       if (!response.ok)
         throw Error(
           messages[response.status] ??
@@ -282,42 +372,31 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
               <form
                 onSubmit={(event) => {
                   event.preventDefault();
-                  const form = event.currentTarget;
-                  const f = new FormData(form);
-                  const environment = String(f.get("environment") ?? "");
-                  const tenant = String(f.get("tenant") ?? "");
-                  const token = String(f.get("token") ?? "");
-                  if (
-                    !/^[A-Za-z0-9_-]{1,64}$/.test(environment) ||
-                    !/^[A-Za-z0-9_-]{1,64}$/.test(tenant) ||
-                    !/^\S{32,4096}$/.test(token)
-                  ) {
-                    setError(
-                      "Enter valid environment and tenant identifiers and a token of at least 32 characters.",
-                    );
-                    return;
-                  }
-                  clearOperation();
-                  setConnection({ environment, tenant, token });
-                  form.reset();
+                  void connectToNamespace(event.currentTarget);
                 }}
                 autoComplete="off"
               >
                 <div className="field-grid">
                   <label className="field">
                     Environment
-                    <input
+                    <select
                       name="environment"
+                      disabled={connecting}
                       required
-                      placeholder="dev"
-                      autoComplete="off"
-                      pattern="[A-Za-z0-9_-]{1,64}"
-                    />
+                      defaultValue="development"
+                    >
+                      {environments.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label className="field">
                     Tenant / namespace
                     <input
                       name="tenant"
+                      disabled={connecting}
                       required
                       placeholder="club-id or _shared"
                       autoComplete="off"
@@ -329,6 +408,7 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
                   Vault bearer token
                   <input
                     name="token"
+                    disabled={connecting}
                     type="password"
                     required
                     minLength={32}
@@ -337,9 +417,28 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
                     placeholder="Scoped token from the vault administrator"
                   />
                 </label>
-                <button className="button primary" type="submit">
-                  Connect to namespace <span aria-hidden="true">→</span>
+                <button
+                  className="button primary"
+                  type="submit"
+                  disabled={connecting}
+                >
+                  {connecting ? "Verifying token…" : "Connect to namespace"}{" "}
+                  <span aria-hidden="true">→</span>
                 </button>
+                {connecting && (
+                  <>
+                    <p role="status" className="form-note">
+                      Authenticating with the vault…
+                    </p>
+                    <button
+                      className="text-button"
+                      type="button"
+                      onClick={() => clearOperation()}
+                    >
+                      Cancel connection
+                    </button>
+                  </>
+                )}
                 <p className="form-note">
                   Token stays in memory for this tab. Nothing is saved in
                   browser storage.
@@ -371,6 +470,12 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
               <InventoryPanel
                 key={`${connection.environment}/${connection.tenant}/${section}`}
                 connection={connection}
+                onUnauthorized={() => {
+                  disconnect();
+                  setError(
+                    "Vault authentication expired or was revoked. Reconnect with a valid token.",
+                  );
+                }}
                 section={section}
                 revision={inventoryRevision}
                 onSelect={(row: InventoryRow) => {

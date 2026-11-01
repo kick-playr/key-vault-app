@@ -32,3 +32,11 @@ Re-read the API working tree when the user reported its concurrent inventory imp
 UI tests cover metadata-only list/search parsing and selection, independent list/read grants, valid query forwarding, unknown/duplicate/prototype-named parameter rejection, namespace/endpoint-bound nextLink conversion, expired/invalidated page restart, stale responses after filter changes and first-page refresh after writes. The proxy preserves only the explicitly allowlisted inventory error codes, not arbitrary upstream messages.
 
 Also ran `npm test -- --runTestsByPath test/inventory.spec.ts` in key-vault-api: 1 suite, 5 tests passed using its disposable MongoDB fixture. No API source or configuration was modified. This verifies the current working-tree inventory implementation, not a deployed instance. Earlier screenshots predate the inventory panel and remain initial layout evidence.
+
+## Connection authentication fix
+
+Root cause: the original Connect button performed only format validation and set local connection state without contacting the API. That made a syntactically valid suffixed token appear connected. The API's full-token SHA-256 comparison already rejected altered credentials; the existing unauthorized-resource test and new authentication regression confirm rejection. No valid-token-prefix authorization was reproduced.
+
+Added read-only GET /local/session in the API, protected by the same token and namespace checks as other routes. It requires no additional list/read/write/crypto permission and returns only authenticated=true plus the authorized scope. The UI requires that exact proof before opening; a denial, unavailable API, malformed/mismatched proof or cancellation leaves it disconnected. Token inputs clear immediately, and later 401 responses disconnect and clear revealed results. No real credentials were used in tests or printed.
+
+UI: 35 tests, typecheck and build passed. Independent review reported no important findings. API validation results are recorded in the API repository. Both services must load the updated sources. The local API was restarted after tests; runtime Swagger confirms /local/session is loaded and a fabricated invalid suffixed credential returns 401. The existing UI dev server receives the source update through hot reload.

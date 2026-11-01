@@ -24,9 +24,18 @@ afterEach(() => {
   dom.window.localStorage.clear();
   dom.window.sessionStorage.clear();
 });
-function connect() {
+async function connect() {
+  const resourceFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) =>
+    String(input) === "/api/vault/local/session"
+      ? Response.json({
+          authenticated: true,
+          environment: "development",
+          tenant: "club-a",
+        })
+      : resourceFetch(input, init);
   fireEvent.change(screen.getByLabelText("Environment"), {
-    target: { value: "dev" },
+    target: { value: "development" },
   });
   fireEvent.change(screen.getByLabelText("Tenant / namespace"), {
     target: { value: "club-a" },
@@ -35,6 +44,7 @@ function connect() {
     target: { value: "fixture-token-for-local-tests-only-12345" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Connect to namespace" }));
+  await screen.findByRole("button", { name: "Disconnect" });
 }
 test("opens a secret through scoped request and keeps its result masked until explicit reveal", async () => {
   globalThis.fetch = async (url, init) => {
@@ -46,7 +56,7 @@ test("opens a secret through scoped request and keeps its result masked until ex
       "fixture-token-for-local-tests-only-12345",
     );
     assert.equal(h.get("x-vault-tenant"), "club-a");
-    assert.equal(h.get("x-vault-environment"), "dev");
+    assert.equal(h.get("x-vault-environment"), "development");
     return Response.json({
       id: "http://127.0.0.1:4000/namespaces/dev/club-a/secrets/demo/v1",
       value: "fixture-secret-value",
@@ -54,7 +64,7 @@ test("opens a secret through scoped request and keeps its result masked until ex
     });
   };
   render(<VaultConsole />);
-  connect();
+  await connect();
   fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
   fireEvent.change(screen.getByLabelText("Resource name"), {
     target: { value: "demo" },
@@ -80,7 +90,7 @@ test("destructive actions need the name confirmation before any network request"
     return Response.json({});
   };
   render(<VaultConsole />);
-  connect();
+  await connect();
   fireEvent.change(screen.getByLabelText("Operation"), {
     target: { value: "key-delete" },
   });
@@ -104,7 +114,7 @@ test("discards an in-flight response after disconnect and never restores another
       resolve = r;
     });
   render(<VaultConsole />);
-  connect();
+  await connect();
   fireEvent.change(screen.getByLabelText("Resource name"), {
     target: { value: "demo" },
   });
@@ -123,7 +133,7 @@ test("permission errors are announced without exposing upstream response text", 
       { status: 403 },
     );
   render(<VaultConsole />);
-  connect();
+  await connect();
   fireEvent.change(screen.getByLabelText("Resource name"), {
     target: { value: "demo" },
   });
@@ -142,7 +152,7 @@ test("failed reconciliation preserves editable manifest and supports exact-paylo
       : Response.json({ revision: 4, mappings: {} });
   };
   render(<VaultConsole />);
-  connect();
+  await connect();
   fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
   const manifest =
     '{"schemaVersion":1,"entries":[{"purpose":"database","kind":"secret","scope":"tenant","envName":"APP_DATABASE_URL"}]}';
@@ -193,7 +203,7 @@ test("version selection fills the exact version without revealing the raw respon
       ],
     });
   render(<VaultConsole />);
-  connect();
+  await connect();
   fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
   fireEvent.change(screen.getByLabelText("Operation"), {
     target: { value: "secret-versions" },
@@ -424,10 +434,10 @@ test("list metadata selection does not read a value until the explicit read oper
             {
               name: "database",
               kind: "secret",
-              id: "http://127.0.0.1:4000/namespaces/dev/club-a/secrets/database",
+              id: "http://127.0.0.1:4000/namespaces/development/club-a/secrets/database",
               version: "v2",
               versionId:
-                "http://127.0.0.1:4000/namespaces/dev/club-a/secrets/database/v2",
+                "http://127.0.0.1:4000/namespaces/development/club-a/secrets/database/v2",
               attributes: { enabled: true },
             },
           ],
@@ -435,7 +445,7 @@ test("list metadata selection does not read a value until the explicit read oper
       : Response.json({ error: { code: "Forbidden" } }, { status: 403 });
   };
   render(<VaultConsole />);
-  connect();
+  await connect();
   fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
   fireEvent.change(screen.getByLabelText("Inventory source"), {
     target: { value: "search" },
@@ -456,4 +466,162 @@ test("list metadata selection does not read a value until the explicit read oper
     ),
   );
   assert.equal(calls[1], "/api/vault/secrets/database/v2");
+});
+test("environment dropdown sends the exact Kickstarter environment identifier", async () => {
+  const sent: string[] = [];
+  globalThis.fetch = async (url, init) => {
+    if (String(url) === "/api/vault/local/session")
+      return Response.json({
+        authenticated: true,
+        environment: new Headers(init?.headers).get("x-vault-environment"),
+        tenant: "club-a",
+      });
+    sent.push(new Headers(init?.headers).get("x-vault-environment")!);
+    return Response.json({ key: { kty: "RSA" } });
+  };
+  render(<VaultConsole />);
+  for (const environment of ["development", "test", "preview", "production"]) {
+    fireEvent.change(screen.getByRole("combobox", { name: "Environment" }), {
+      target: { value: environment },
+    });
+    fireEvent.change(screen.getByLabelText("Tenant / namespace"), {
+      target: { value: "club-a" },
+    });
+    fireEvent.change(screen.getByLabelText("Vault bearer token"), {
+      target: { value: "fixture-token-for-local-tests-only-12345" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Connect to namespace" }),
+    );
+    await screen.findByRole("button", { name: "Disconnect" });
+    fireEvent.change(screen.getByLabelText("Resource name"), {
+      target: { value: "demo" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Run Open key" }));
+    await screen.findByText("Operation completed.");
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+  }
+  assert.deepEqual(sent, ["development", "test", "preview", "production"]);
+});
+test("does not open the console when a suffixed token fails server authentication", async () => {
+  let sent = "";
+  globalThis.fetch = async (url, init) => {
+    assert.equal(url, "/api/vault/local/session");
+    sent = new Headers(init?.headers).get("x-vault-token")!;
+    return Response.json({ error: { code: "Unauthorized" } }, { status: 401 });
+  };
+  render(<VaultConsole />);
+  fireEvent.change(screen.getByLabelText("Tenant / namespace"), {
+    target: { value: "club-a" },
+  });
+  fireEvent.change(screen.getByLabelText("Vault bearer token"), {
+    target: { value: "fixture-token-for-local-tests-only-12345asdfasdfasfs" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Connect to namespace" }));
+  await waitFor(() =>
+    assert.match(
+      screen.getByRole("alert").textContent ?? "",
+      /invalid.*token|token.*invalid/i,
+    ),
+  );
+  assert.equal(sent, "fixture-token-for-local-tests-only-12345asdfasdfasfs");
+  assert.equal(screen.queryByRole("button", { name: "Disconnect" }), null);
+  assert.equal(screen.queryByLabelText("Resource name"), null);
+  assert.equal(
+    (screen.getByLabelText("Vault bearer token") as HTMLInputElement).value,
+    "",
+  );
+});
+test("connection fails closed for wrong namespace, unavailable API and malformed success responses", async () => {
+  const responses = [
+    Response.json({ error: { code: "Forbidden" } }, { status: 403 }),
+    Response.json({ error: { code: "Unavailable" } }, { status: 503 }),
+    Response.json({}),
+    Response.json({
+      authenticated: true,
+      environment: "production",
+      tenant: "club-a",
+    }),
+  ];
+  for (const response of responses) {
+    globalThis.fetch = async () => response;
+    render(<VaultConsole />);
+    fireEvent.change(screen.getByLabelText("Tenant / namespace"), {
+      target: { value: "club-a" },
+    });
+    fireEvent.change(screen.getByLabelText("Vault bearer token"), {
+      target: { value: "fixture-token-for-local-tests-only-12345" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Connect to namespace" }),
+    );
+    await screen.findByRole("alert");
+    assert.equal(screen.queryByRole("button", { name: "Disconnect" }), null);
+    assert.equal(screen.queryByLabelText("Resource name"), null);
+    cleanup();
+  }
+});
+test("connection stays locked until server proof arrives and cancelled proof cannot reconnect", async () => {
+  let resolve!: (r: Response) => void;
+  globalThis.fetch = () =>
+    new Promise<Response>((r) => {
+      resolve = r;
+    });
+  render(<VaultConsole />);
+  fireEvent.change(screen.getByLabelText("Tenant / namespace"), {
+    target: { value: "club-a" },
+  });
+  fireEvent.change(screen.getByLabelText("Vault bearer token"), {
+    target: { value: "fixture-token-for-local-tests-only-12345" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Connect to namespace" }));
+  assert.equal(screen.queryByLabelText("Resource name"), null);
+  assert.equal(screen.queryByRole("button", { name: "Disconnect" }), null);
+  assert.equal(
+    (
+      screen.getByRole("button", {
+        name: /Verifying token/,
+      }) as HTMLButtonElement
+    ).disabled,
+    true,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Cancel connection" }));
+  await act(async () =>
+    resolve(
+      Response.json({
+        authenticated: true,
+        environment: "development",
+        tenant: "club-a",
+      }),
+    ),
+  );
+  assert.equal(screen.queryByRole("button", { name: "Disconnect" }), null);
+  assert.equal(
+    (screen.getByLabelText("Vault bearer token") as HTMLInputElement).value,
+    "",
+  );
+});
+test("a revoked token clears the authenticated console and any revealed result", async () => {
+  let call = 0;
+  globalThis.fetch = async () =>
+    ++call === 1
+      ? Response.json({ value: "revealed-fixture-secret" })
+      : Response.json({ error: { code: "Unauthorized" } }, { status: 401 });
+  render(<VaultConsole />);
+  await connect();
+  fireEvent.change(screen.getByLabelText("Resource name"), {
+    target: { value: "demo" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Run Open key" }));
+  await screen.findByText("Operation completed.");
+  fireEvent.click(screen.getByRole("button", { name: "Reveal result" }));
+  assert.ok(screen.getByText(/revealed-fixture-secret/));
+  fireEvent.click(screen.getByRole("button", { name: "Run Open key" }));
+  await screen.findByRole("alert");
+  assert.equal(screen.queryByRole("button", { name: "Disconnect" }), null);
+  assert.equal(screen.queryByText(/revealed-fixture-secret/), null);
+  assert.equal(
+    (screen.getByLabelText("Vault bearer token") as HTMLInputElement).value,
+    "",
+  );
 });

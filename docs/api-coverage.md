@@ -6,6 +6,7 @@ The browser uses `x-vault-token` to keep the vault credential separate from Cler
 
 | Method / route | UI workflow | Permission | Automated verification |
 | --- | --- | --- | --- |
+| GET /local/session | Verify exact token and namespace before connecting; no resource reads or writes | Any enabled grant in this scope | Suffixed/truncated token 401, wrong scope 403, individual permission grants, cancelled/failed proof, no token echo |
 | GET /keys | Key inventory, page size, next page and metadata selection | list | Query allowlist, fixed API version, safe pagination, denied list |
 | GET /secrets | Secret inventory without values, page size, next page and selection | list | Query allowlist, metadata projection, independent read permission |
 | GET /local/inventory | Combined/filtered inventory by kind, exact name, prefix, purpose, tags, enabled and expiresBefore | list | All filter parameters, scope binding, stale responses, pagination invalidation/restart |

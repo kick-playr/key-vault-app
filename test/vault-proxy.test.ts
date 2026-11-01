@@ -214,3 +214,51 @@ test("sanitizes upstream failures and malformed responses without echoing secret
   assert.equal(down.status, 502);
   assert.ok(!(await down.text()).includes(token));
 });
+test("accepts the localhost UI origin while keeping the vault upstream on numeric loopback", async () => {
+  const req = new Request("http://localhost:4001/api/vault/keys/demo", {
+    headers: {
+      "x-vault-token": token,
+      "x-vault-environment": "dev",
+      "x-vault-tenant": "club-a",
+      origin: "http://localhost:4001",
+      host: "localhost:4001",
+    },
+  });
+  const result = await forwardVault(req, ["keys", "demo"], {
+    ...options,
+    fetch: async (url) => {
+      assert.equal(new URL(String(url)).hostname, "127.0.0.1");
+      return Response.json({ key: { kid: "fixture" } });
+    },
+  });
+  assert.equal(result.status, 200);
+});
+test("connection validation forwards the complete suffixed token and propagates rejection", async () => {
+  const invalid = token + "asdfasdfasfs";
+  const response = await forwardVault(
+    new Request("http://localhost:4001/api/vault/local/session", {
+      headers: {
+        "x-vault-token": invalid,
+        "x-vault-environment": "dev",
+        "x-vault-tenant": "club-a",
+      },
+    }),
+    ["local", "session"],
+    {
+      ...options,
+      fetch: async (url, init) => {
+        assert.equal(String(url), "http://127.0.0.1:4000/local/session");
+        assert.equal(
+          new Headers(init?.headers).get("authorization"),
+          `Bearer ${invalid}`,
+        );
+        return Response.json(
+          { error: { code: "Unauthorized", message: invalid } },
+          { status: 401 },
+        );
+      },
+    },
+  );
+  assert.equal(response.status, 401);
+  assert.ok(!(await response.text()).includes(invalid));
+});
