@@ -843,3 +843,218 @@ main {
     padding: 28px;
   }
 }
+
+/* APP-50: additive resource workspaces reuse the existing shell. */
+.azure-panel {
+  padding: 28px;
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.azure-breadcrumb {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.azure-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+.azure-toolbar .field {
+  flex: 1;
+  min-width: 180px;
+  max-width: 460px;
+}
+.azure-panel button {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 9px 16px;
+  background: var(--surface);
+  color: var(--green);
+  font-weight: 600;
+}
+.azure-form {
+  display: grid;
+  gap: 20px;
+  max-width: 780px;
+}
+.azure-form > .azure-toolbar button[type="submit"],
+.azure-toolbar > button:first-child {
+  color: white;
+  background: var(--green);
+}
+.azure-form fieldset {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+.azure-form input[type="checkbox"] {
+  margin-right: 8px;
+}
+.azure-properties {
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+.azure-properties > * {
+  margin-bottom: 16px;
+}
+.azure-properties summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.azure-tag {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+.azure-tag .field {
+  flex: 1;
+  min-width: 160px;
+}
+.azure-table {
+  border-collapse: collapse;
+  width: 100%;
+  text-align: left;
+}
+.azure-table caption {
+  text-align: left;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.azure-table th,
+.azure-table td {
+  padding: 14px 10px;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.azure-history {
+  display: grid;
+  gap: 16px;
+}
+.azure-history h3 {
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.azure-version-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.azure-version-row button {
+  overflow-wrap: anywhere;
+  text-align: left;
+  max-width: 100%;
+}
+.azure-version-row button[aria-pressed="true"] {
+  background: #e3f2eb;
+  border-color: var(--green);
+}
+.azure-version-details {
+  border: 1px solid var(--line);
+  padding: 20px;
+  border-radius: 8px;
+  display: grid;
+  gap: 16px;
+}
+.azure-version-details dl {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) 3fr;
+  gap: 8px 16px;
+}
+.azure-version-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.azure-success {
+  border-left: 3px solid var(--green);
+  padding: 12px;
+  background: #e3f2eb;
+  overflow-wrap: anywhere;
+}
+.azure-confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: #102e29f5;
+  color: white;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: center;
+  gap: 20px;
+  padding: 24px;
+}
+.azure-confirm p {
+  width: 100%;
+  text-align: center;
+}
+.azure-confirm button {
+  background: white;
+  color: var(--green);
+  padding: 12px 20px;
+  border-radius: 6px;
+}
+@media (max-width: 700px) {
+  .azure-panel {
+    padding: 18px;
+    gap: 16px;
+  }
+  .azure-table,
+  .azure-table tbody,
+  .azure-table tr,
+  .azure-table td {
+    display: block;
+  }
+  .azure-table thead {
+    display: none;
+  }
+  .azure-table tr {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    margin-bottom: 12px;
+    padding: 10px;
+  }
+  .azure-table td {
+    border: 0;
+    padding: 6px;
+  }
+  .azure-table td::before {
+    content: attr(data-label) ": ";
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .azure-toolbar button {
+    flex: 1;
+  }
+  .azure-version-details dl {
+    grid-template-columns: 1fr;
+  }
+  .azure-version-details dd {
+    margin-bottom: 8px;
+  }
+}
+.azure-form > .azure-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+@media (max-width: 560px) {
+  .sidebar nav {
+    flex-wrap: wrap;
+  }
+  .nav-item {
+    flex: 1 1 130px;
+    min-width: 0;
+  }
+}
