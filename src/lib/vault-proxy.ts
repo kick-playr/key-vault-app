@@ -1,0 +1,201 @@
+/** Server boundary. No credentials, bodies or upstream messages are logged. */
+export interface ProxyOptions {
+  userId: string | null;
+  upstream: string;
+  fetch?: typeof fetch;
+}
+const MAX_REQUEST = 128 * 1024;
+const MAX_RESPONSE = 1024 * 1024;
+const scopePattern = /^[A-Za-z0-9_-]{1,64}$/;
+const namePattern = /^[A-Za-z0-9-]{1,127}$/;
+const versionPattern = /^[A-Za-z0-9-]{1,128}$/;
+const safeHeaders = {
+  "Cache-Control": "no-store",
+  "X-Content-Type-Options": "nosniff",
+};
+function failure(status: number, code: string) {
+  return Response.json(
+    { error: { code, message: code } },
+    { status, headers: safeHeaders },
+  );
+}
+export function supportedRoute(method: string, path: string[]) {
+  const [kind, name, version, action] = path;
+  if (kind === "local")
+    return (
+      path.length === 2 &&
+      method === "POST" &&
+      ["reconcile", "snapshot"].includes(name ?? "")
+    );
+  if (
+    !["keys", "secrets"].includes(kind ?? "") ||
+    !namePattern.test(name ?? "")
+  )
+    return false;
+  if (path.length === 2)
+    return ["GET", "DELETE", ...(kind === "secrets" ? ["PUT"] : [])].includes(
+      method,
+    );
+  if (path.length === 3) {
+    if (version === "create") return kind === "keys" && method === "POST";
+    if (version === "versions") return method === "GET";
+    return (
+      versionPattern.test(version ?? "") && ["GET", "PATCH"].includes(method)
+    );
+  }
+  return (
+    path.length === 4 &&
+    kind === "keys" &&
+    versionPattern.test(version ?? "") &&
+    ["encrypt", "decrypt"].includes(action ?? "") &&
+    method === "POST"
+  );
+}
+async function boundedText(
+  stream: ReadableStream<Uint8Array> | null,
+  limit: number,
+): Promise<string> {
+  if (!stream) return "";
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > limit) {
+        await reader.cancel();
+        throw new RangeError("Size limit");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+}
+export async function forwardVault(
+  request: Request,
+  path: string[],
+  options: ProxyOptions,
+): Promise<Response> {
+  const url = new URL(request.url);
+  if (
+    url.protocol !== "http:" ||
+    url.hostname !== "127.0.0.1" ||
+    (request.headers.get("host") && request.headers.get("host") !== url.host)
+  )
+    return failure(403, "Forbidden");
+  const origin = request.headers.get("origin");
+  if (
+    (origin && origin !== url.origin) ||
+    request.headers.get("sec-fetch-site") === "cross-site"
+  )
+    return failure(403, "Forbidden");
+  if (!options.userId) return failure(401, "SignInRequired");
+  // Clerk owns Authorization on incoming requests; vault tokens use a distinct header.
+  const vaultToken = request.headers.get("x-vault-token") ?? "";
+  const authorization = `Bearer ${vaultToken}`;
+  if (!/^Bearer [\x21-\x7e]{32,4096}$/.test(authorization))
+    return failure(401, "VaultTokenRequired");
+  const environment = request.headers.get("x-vault-environment") ?? "";
+  const tenant = request.headers.get("x-vault-tenant") ?? "";
+  if (
+    !scopePattern.test(environment) ||
+    !scopePattern.test(tenant) ||
+    !supportedRoute(request.method, path) ||
+    url.search
+  )
+    return failure(400, "BadParameter");
+  let upstream: URL;
+  try {
+    upstream = new URL(options.upstream);
+    if (
+      upstream.protocol !== "http:" ||
+      upstream.hostname !== "127.0.0.1" ||
+      upstream.pathname !== "/" ||
+      upstream.username ||
+      upstream.password ||
+      upstream.search ||
+      upstream.hash
+    )
+      throw Error();
+  } catch {
+    return failure(503, "VaultNotConfigured");
+  }
+  let body: string | undefined;
+  if (["POST", "PUT", "PATCH"].includes(request.method)) {
+    if (
+      request.headers.get("content-type")?.split(";")[0]?.trim() !==
+      "application/json"
+    )
+      return failure(415, "JsonRequired");
+    try {
+      body = await boundedText(request.body, MAX_REQUEST);
+      const parsed: unknown = JSON.parse(body);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+        return failure(400, "BadParameter");
+    } catch (error) {
+      return failure(error instanceof RangeError ? 413 : 400, "BadParameter");
+    }
+  }
+  const target = new URL(
+    "/" + path.map(encodeURIComponent).join("/"),
+    upstream,
+  );
+  if (path[0] !== "local") target.searchParams.set("api-version", "2025-07-01");
+  try {
+    const response = await (options.fetch ?? fetch)(target, {
+      method: request.method,
+      headers: {
+        authorization,
+        "x-vault-environment": environment,
+        "x-vault-tenant": tenant,
+        ...(body ? { "content-type": "application/json" } : {}),
+      },
+      body,
+      cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(5000)]),
+    });
+    if (!response.ok) {
+      await response.body?.cancel();
+      const codes: Record<number, string> = {
+        400: "BadParameter",
+        401: "Unauthorized",
+        403: "Forbidden",
+        404: "NotFound",
+        409: "RevisionConflict",
+        413: "PayloadTooLarge",
+        429: "TooManyRequests",
+        503: "VaultUnavailable",
+      };
+      return failure(
+        response.status >= 400 && response.status <= 599
+          ? response.status
+          : 502,
+        codes[response.status] ?? "VaultOperationFailed",
+      );
+    }
+    const value: unknown = JSON.parse(
+      await boundedText(response.body, MAX_RESPONSE),
+    );
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      return failure(502, "InvalidVaultResponse");
+    return Response.json(value, { headers: safeHeaders });
+  } catch (error) {
+    return failure(
+      error instanceof DOMException && error.name === "TimeoutError"
+        ? 504
+        : 502,
+      "VaultUnavailable",
+    );
+  }
+}
