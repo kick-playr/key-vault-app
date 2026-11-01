@@ -1137,3 +1137,50 @@ main {
     margin-right: 0;
   }
 }
+
+/* Dense inventory rows without changing resource selection or metadata. */
+.azure-table {
+  font-size: 13px;
+  line-height: 1.35;
+}
+.azure-table caption {
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.azure-table th,
+.azure-table td {
+  padding: 6px 10px;
+  vertical-align: middle;
+}
+.azure-table td button {
+  min-height: 24px;
+  max-width: 100%;
+  border: 0;
+  border-radius: 2px;
+  padding: 0;
+  background: transparent;
+  font-size: 14px;
+  line-height: 1.25;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.azure-table td button:hover {
+  text-decoration: underline;
+}
+.azure-table .azure-resource-id {
+  margin-top: 0;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.azure-table td[data-label="Updated"] {
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  .azure-table tr {
+    padding: 6px;
+    margin-bottom: 8px;
+  }
+  .azure-table td {
+    padding: 3px 6px;
+  }
+}
