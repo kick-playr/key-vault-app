@@ -11,7 +11,7 @@ Object.assign(globalThis, {
   HTMLElement: dom.window.HTMLElement,
   IS_REACT_ACT_ENVIRONMENT: true,
 });
-const { render, screen, fireEvent, cleanup, act } = await import(
+const { render, screen, fireEvent, cleanup, act, waitFor } = await import(
   "@testing-library/react"
 );
 const { SecretVersionValue } = await import(
@@ -303,4 +303,43 @@ test("hidden copying starts clipboard write inside the click while the read is p
       .type,
     "password",
   );
+});
+test("a revealed value can still be hidden while clipboard permission is pending", async () => {
+  let finishCopy!: () => void;
+  globalThis.fetch = async () =>
+    Response.json({
+      id,
+      value: "fixture-to-hide",
+      attributes: { enabled: true },
+    });
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: {
+      writeText: async () =>
+        new Promise<void>((resolve) => {
+          finishCopy = resolve;
+        }),
+    },
+  });
+  render(panel());
+  fireEvent.click(screen.getByRole("button", { name: "Show secret value" }));
+  await screen.findByRole("button", { name: "Hide secret value" });
+  fireEvent.click(screen.getByRole("button", { name: "Copy secret value" }));
+  await waitFor(() => assert.equal(typeof finishCopy, "function"));
+  assert.equal(
+    (
+      screen.getByRole("button", {
+        name: "Hide secret value",
+      }) as HTMLButtonElement
+    ).disabled,
+    false,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Hide secret value" }));
+  assert.equal(
+    (screen.getByLabelText("Selected version secret value") as HTMLInputElement)
+      .type,
+    "password",
+  );
+  await act(async () => finishCopy());
+  assert.equal(screen.queryByText(/Copied/), null);
 });

@@ -175,7 +175,7 @@ export function SecretVersionValue({
       <div className="azure-toolbar">
         <button
           type="button"
-          disabled={loading}
+          disabled={loading && value === undefined}
           onClick={() => (value === undefined ? void show() : hide())}
           aria-expanded={value !== undefined}
         >

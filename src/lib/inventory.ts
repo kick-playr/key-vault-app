@@ -7,6 +7,7 @@ export interface InventoryRow {
   name: string;
   kind: "key" | "secret";
   version: string;
+  versionCount?: number;
   enabled: boolean;
   expires?: number;
   activation?: number;
@@ -159,6 +160,12 @@ export function parseInventory(
     const name = url.pathname.slice(prefix.length);
     if (!/^[A-Za-z0-9-]{1,127}$/.test(name))
       throw Error("Invalid inventory name.");
+    if (
+      item.versionCount !== undefined &&
+      (!Number.isSafeInteger(item.versionCount) ||
+        (item.versionCount as number) < 1)
+    )
+      throw Error("Invalid version count.");
     const attributes = record(item.attributes);
     if (typeof attributes.enabled !== "boolean")
       throw Error("Invalid inventory status.");
@@ -198,6 +205,9 @@ export function parseInventory(
       kind,
       name,
       version,
+      ...(item.versionCount !== undefined
+        ? { versionCount: item.versionCount as number }
+        : {}),
       enabled: attributes.enabled,
       ...(expires !== undefined ? { expires: expires as number } : {}),
       ...(Number.isSafeInteger(attributes.nbf) &&

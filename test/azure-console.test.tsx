@@ -577,3 +577,43 @@ test("selected secret version can be revealed and metadata editor starts hidden 
     1,
   );
 });
+test("typing searches after three characters without clearing the existing rows first", async () => {
+  const row = {
+    name: "physical",
+    kind: "secret",
+    id: id.replace("/demo/", "/physical"),
+    version: "v1",
+    versionId: id.replace("/demo/", "/physical/") + "v1",
+    versionCount: 3,
+    attributes: { enabled: true },
+    tags: { purpose: "Initial row" },
+  };
+  setup(async () => Response.json({ value: [row] }));
+  await secrets();
+  await screen.findByRole("button", { name: "Initial row" });
+  assert.ok(screen.getByRole("columnheader", { name: "Versions" }));
+  const count = calls.length;
+  fireEvent.change(screen.getByLabelText("Search by name or purpose"), {
+    target: { value: "cl" },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  assert.equal(calls.length, count);
+  assert.ok(screen.getByRole("button", { name: "Initial row" }));
+  fireEvent.change(screen.getByLabelText("Search by name or purpose"), {
+    target: { value: "clerk" },
+  });
+  assert.ok(screen.getByRole("button", { name: "Initial row" }));
+  await waitFor(() =>
+    assert.ok(
+      calls.some(
+        (c) =>
+          new URL(c.url, "http://localhost").searchParams.get("search") ===
+          "clerk",
+      ),
+    ),
+  );
+  fireEvent.change(screen.getByLabelText("Search by name or purpose"), {
+    target: { value: "" },
+  });
+  await waitFor(() => assert.ok(calls.length > count + 1));
+});

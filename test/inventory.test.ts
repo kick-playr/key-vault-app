@@ -226,3 +226,33 @@ test("forwards name-or-purpose search through the existing scoped proxy", async 
   assert.equal(response.status, 200);
   assert.equal(new URL(observed).searchParams.get("search"), "Data Base");
 });
+test("parses optional version counts without inventing missing counts", () => {
+  const row = {
+    kind: "secret",
+    name: "demo",
+    id: "http://127.0.0.1:4000/namespaces/dev/club-a/secrets/demo",
+    version: "v1",
+    versionId: "http://127.0.0.1:4000/namespaces/dev/club-a/secrets/demo/v1",
+    attributes: { enabled: true },
+  };
+  assert.equal(
+    parseInventory(
+      { value: [{ ...row, versionCount: 3 }] },
+      "local/inventory",
+      scope,
+    ).rows[0]?.versionCount,
+    3,
+  );
+  assert.equal(
+    parseInventory({ value: [row] }, "local/inventory", scope).rows[0]
+      ?.versionCount,
+    undefined,
+  );
+  assert.throws(() =>
+    parseInventory(
+      { value: [{ ...row, versionCount: 0 }] },
+      "local/inventory",
+      scope,
+    ),
+  );
+});

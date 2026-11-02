@@ -57,11 +57,13 @@ export function AzureVaultPanel({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
+  const [searchPending, setSearchPending] = useState(false);
   const [pending, setPending] = useState<() => void>();
   const dirty = useRef(false),
     epoch = useRef(0),
     controller = useRef<AbortController | null>(null),
     mounted = useRef(true);
+  const previousSearch = useRef(search);
   const heading = useRef<HTMLHeadingElement>(null),
     alert = useRef<HTMLParagraphElement>(null);
   function markDirty(value: boolean) {
@@ -69,6 +71,7 @@ export function AzureVaultPanel({
     onDirty(value);
   }
   function begin() {
+    setSearchPending(false);
     controller.current?.abort();
     controller.current = new AbortController();
     epoch.current++;
@@ -140,7 +143,7 @@ export function AzureVaultPanel({
       kind: kind === "keys" ? "key" : "secret",
       maxresults: "25",
     });
-    if (search) q.set("search", search);
+    if (search.length >= 3) q.set("search", search);
     return "local/inventory?" + q;
   }
   async function inventory(task: Task, path = inventoryPath(), append = false) {
@@ -156,6 +159,7 @@ export function AzureVaultPanel({
     }
   }
   async function refreshList(path?: string, append = false) {
+    if (!path && search.length > 0 && search.length < 3) return;
     const task = begin();
     try {
       await inventory(task, path, append);
@@ -199,6 +203,7 @@ export function AzureVaultPanel({
     } else action();
   }
   function cancelRead() {
+    setSearchPending(false);
     controller.current?.abort();
     epoch.current++;
     setBusy(false);
@@ -288,6 +293,16 @@ export function AzureVaultPanel({
       onDirty(false);
     };
   }, [connection, kind]); // Connection identity changes only on authenticated connect.
+  useEffect(() => {
+    if (previousSearch.current === search) return;
+    previousSearch.current = search;
+    if (mode || (search.length > 0 && search.length < 3)) return;
+    const scheduled = epoch.current;
+    const timer = setTimeout(() => {
+      if (mounted.current && scheduled === epoch.current) void refreshList();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search, mode]);
   return (
     <section
       className="panel azure-panel"
@@ -319,6 +334,11 @@ export function AzureVaultPanel({
       {error && (
         <p ref={alert} role="alert" tabIndex={-1} className="error">
           {error}
+        </p>
+      )}
+      {searchPending && !busy && (
+        <p role="status" className="muted">
+          Searching…
         </p>
       )}
       {busy && (
@@ -390,12 +410,18 @@ export function AzureVaultPanel({
                     epoch.current++;
                     setBusy(false);
                     setSearch(e.target.value);
+                    setSearchPending(
+                      e.target.value.length === 0 || e.target.value.length >= 3,
+                    );
                     setNext(undefined);
-                    setRows([]);
                   }}
                 />
               </label>
-              <button disabled={busy}>Search</button>
+              <button
+                disabled={busy || (search.length > 0 && search.length < 3)}
+              >
+                Search
+              </button>
             </form>
 
             <button
@@ -440,6 +466,11 @@ export function AzureVaultPanel({
               </>
             )}
           </div>
+          {search.length > 0 && search.length < 3 && (
+            <p className="muted">
+              Type at least 3 characters to search by name or purpose.
+            </p>
+          )}
           <details className="azure-open-by-name">
             <summary>Open by name…</summary>
             <form
@@ -524,19 +555,23 @@ export function AzureVaultPanel({
               )}
             </div>
           )}
-          {!busy && !rows.length && (
-            <p className="muted">
-              {search
-                ? "No matching resources."
-                : "No resources loaded. Create one, refresh, or open by name if list permission is unavailable."}
-            </p>
-          )}
+          {!busy &&
+            !searchPending &&
+            !rows.length &&
+            !(search.length > 0 && search.length < 3) && (
+              <p className="muted">
+                {search
+                  ? "No matching resources."
+                  : "No resources loaded. Create one, refresh, or open by name if list permission is unavailable."}
+              </p>
+            )}
           {!!rows.length && (
             <table className="azure-table">
               <caption>Latest resource metadata</caption>
               <thead>
                 <tr>
                   <th>Name</th>
+                  {kind === "secrets" && <th>Versions</th>}
                   <th>Status</th>
                   <th>Updated (UTC)</th>
                 </tr>
@@ -554,6 +589,9 @@ export function AzureVaultPanel({
                         </small>
                       )}
                     </td>
+                    {kind === "secrets" && (
+                      <td data-label="Versions">{row.versionCount ?? "—"}</td>
+                    )}
                     <td data-label="Status">
                       {lifecycle({
                         version: row.version,
