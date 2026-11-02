@@ -867,11 +867,11 @@ main {
   max-width: 460px;
 }
 .azure-panel button {
-  border: 1px solid var(--line);
+  border: 1px solid var(--green);
   border-radius: 6px;
   padding: 9px 16px;
-  background: var(--surface);
-  color: var(--green);
+  background: var(--green);
+  color: white;
   font-weight: 600;
 }
 .azure-form {
@@ -954,8 +954,9 @@ main {
   max-width: 100%;
 }
 .azure-version-row button[aria-pressed="true"] {
-  background: #e3f2eb;
-  border-color: var(--green);
+  background: #104e3c;
+  border-color: #104e3c;
+  color: white;
 }
 .azure-version-details {
   border: 1px solid var(--line);
@@ -1153,6 +1154,7 @@ main {
   vertical-align: middle;
 }
 .azure-table td button {
+  color: var(--green);
   min-height: 24px;
   max-width: 100%;
   border: 0;
@@ -1189,10 +1191,7 @@ main {
   gap: 10px;
   min-width: 0;
 }
-.secret-version-value .azure-toolbar > button:first-child {
-  background: var(--surface);
-  color: var(--green);
-}
+
 .secret-version-value .field {
   margin: 0;
 }
@@ -1211,6 +1210,7 @@ main {
   margin-left: auto;
 }
 .azure-resource-toolbar .azure-open-by-name summary {
+  background: var(--green);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1219,7 +1219,7 @@ main {
   min-height: 36px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  color: var(--green);
+  color: white;
   font-size: 22px;
   line-height: 1;
 }

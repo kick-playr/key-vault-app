@@ -96,3 +96,9 @@ All70 tests, typecheck, production build and diff check passed. Existing open-by
 Copy uses the Heroicons DocumentDuplicate icon with an accessible Copy secret value label. Successful writes replace the icon with Copied for3000ms, then restore it. Starting another operation, hiding/leaving or unmounting clears feedback/timer; failures never show success. A screen-reader status announces the copy without duplicating visible text. Existing hidden-copy and permission boundaries remain unchanged.
 
 The new fake-clock regression failed before implementation and now confirms the icon initially, Copied through2999ms, and icon restored at3000ms. All71 tests, typecheck, production build and diff check passed. Generated next-env.d.ts preserved; no actual clipboard/vault operation, service restart or deployment.
+
+## Consistent green actions — release 0.1.10 (2026-11-02)
+
+Azure-style Keys/Secrets action buttons now share green backgrounds, green borders and white text, including Search, Generate/Import, Refresh, value actions and the toolbar disclosure. Removed the white value-action override. Selected version actions use a darker green; compact resource-name links retain green text on their transparent background so they remain readable. Disabled/focus styles remain in place.
+
+CSS-only change. All71 tests, typecheck, production build and diff check pass. Generated next-env.d.ts preserved. No API, service/restart/live clipboard/vault or deployment changes; rendered visual verification remains unverified.
