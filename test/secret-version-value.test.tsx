@@ -25,9 +25,14 @@ const connection = {
 const id =
   "http://127.0.0.1:4000/namespaces/development/club-a/secrets/demo/v1";
 const originalFetch = globalThis.fetch;
+const originalClipboardItem = globalThis.ClipboardItem;
 afterEach(() => {
   cleanup();
   globalThis.fetch = originalFetch;
+  Object.defineProperty(globalThis, "ClipboardItem", {
+    configurable: true,
+    value: originalClipboardItem,
+  });
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
     value: undefined,
@@ -44,7 +49,7 @@ function panel(version = "v1") {
     />
   );
 }
-test("value is not fetched until Show, exact version stays scoped and Copy preserves original bytes", async () => {
+test("value is fetched only on explicit action, exact version stays scoped and Copy preserves original bytes", async () => {
   let calls = 0,
     copied = "";
   const secret = "\ufeffline1\r\nline2";
@@ -80,7 +85,7 @@ test("value is not fetched until Show, exact version stays scoped and Copy prese
         name: "Copy secret value",
       }) as HTMLButtonElement
     ).disabled,
-    true,
+    false,
   );
   fireEvent.click(screen.getByRole("button", { name: "Show secret value" }));
   await screen.findByRole("button", { name: "Hide secret value" });
@@ -165,4 +170,137 @@ test("rejects a response for a foreign exact version and handles clipboard denia
   fireEvent.click(screen.getByRole("button", { name: "Copy secret value" }));
   await screen.findByText(/Could not copy/);
   assert.equal(document.body.textContent?.includes("private-error"), false);
+});
+test("Copy reads a hidden value on demand without revealing or retaining it", async () => {
+  let copied = "",
+    calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    return Response.json({
+      id,
+      value: "hidden\r\nvalue",
+      attributes: { enabled: true },
+    });
+  };
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: {
+      writeText: async (text: string) => {
+        copied = text;
+      },
+    },
+  });
+  render(panel());
+  fireEvent.click(screen.getByRole("button", { name: "Copy secret value" }));
+  await screen.findByText(/Copied/);
+  assert.equal(copied, "hidden\r\nvalue");
+  assert.equal(
+    (screen.getByLabelText("Selected version secret value") as HTMLInputElement)
+      .type,
+    "password",
+  );
+  assert.equal(
+    screen.queryByRole("button", { name: "Hide secret value" }),
+    null,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Show secret value" }));
+  await screen.findByRole("button", { name: "Hide secret value" });
+  assert.equal(calls, 2);
+});
+test("a hidden copy request cannot copy a response after switching versions", async () => {
+  let resolve!: (r: Response) => void,
+    copies = 0;
+  globalThis.fetch = async () =>
+    new Promise((r) => {
+      resolve = r;
+    });
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: {
+      writeText: async () => {
+        copies++;
+      },
+    },
+  });
+  const view = render(panel());
+  fireEvent.click(screen.getByRole("button", { name: "Copy secret value" }));
+  view.rerender(panel("v2"));
+  await act(async () =>
+    resolve(Response.json({ id, value: "old", attributes: { enabled: true } })),
+  );
+  assert.equal(copies, 0);
+  assert.equal(screen.queryByText(/Copied/), null);
+});
+test("hidden-copy read denial leaves the value hidden and never writes clipboard", async () => {
+  let copies = 0;
+  globalThis.fetch = async () =>
+    Response.json(
+      { error: { message: "sensitive-upstream" } },
+      { status: 403 },
+    );
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: {
+      writeText: async () => {
+        copies++;
+      },
+    },
+  });
+  render(panel());
+  fireEvent.click(screen.getByRole("button", { name: "Copy secret value" }));
+  await screen.findByRole("alert");
+  assert.equal(copies, 0);
+  assert.equal(
+    document.body.textContent?.includes("sensitive-upstream"),
+    false,
+  );
+  assert.equal(
+    (screen.getByLabelText("Selected version secret value") as HTMLInputElement)
+      .type,
+    "password",
+  );
+});
+test("hidden copying starts clipboard write inside the click while the read is pending", async () => {
+  let resolve!: (r: Response) => void,
+    started = false,
+    copied = "";
+  globalThis.fetch = async () =>
+    new Promise((r) => {
+      resolve = r;
+    });
+  class TestClipboardItem {
+    constructor(readonly data: Record<string, Promise<Blob>>) {}
+  }
+  Object.defineProperty(globalThis, "ClipboardItem", {
+    configurable: true,
+    value: TestClipboardItem,
+  });
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: {
+      write: async (items: TestClipboardItem[]) => {
+        started = true;
+        copied = await (await items[0]!.data["text/plain"]!).text();
+      },
+    },
+  });
+  render(panel());
+  fireEvent.click(screen.getByRole("button", { name: "Copy secret value" }));
+  assert.equal(started, true);
+  await act(async () =>
+    resolve(
+      Response.json({
+        id,
+        value: "exact\r\nvalue",
+        attributes: { enabled: true },
+      }),
+    ),
+  );
+  await screen.findByText(/Copied/);
+  assert.equal(copied, "exact\r\nvalue");
+  assert.equal(
+    (screen.getByLabelText("Selected version secret value") as HTMLInputElement)
+      .type,
+    "password",
+  );
 });

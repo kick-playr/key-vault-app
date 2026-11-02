@@ -14,6 +14,7 @@ export function SecretVersionValue({
 }: Props) {
   const [value, setValue] = useState<string>(),
     [loading, setLoading] = useState(false),
+    [copying, setCopying] = useState(false),
     [message, setMessage] = useState(""),
     [error, setError] = useState("");
   const generation = useRef(0),
@@ -31,6 +32,7 @@ export function SecretVersionValue({
     request.current = null;
     setValue(undefined);
     setLoading(false);
+    setCopying(false);
     setMessage("");
     setError("");
   }
@@ -51,6 +53,46 @@ export function SecretVersionValue({
       document.removeEventListener("visibilitychange", visibility);
     };
   }, [identity, connection.token]);
+  async function readSecret(
+    current: number,
+    controller: AbortController,
+  ): Promise<string> {
+    const response = await fetch(
+      `/api/vault/secrets/${encodeURIComponent(name)}/${encodeURIComponent(version)}`,
+      {
+        headers: {
+          "x-vault-token": connection.token,
+          "x-vault-environment": connection.environment,
+          "x-vault-tenant": connection.tenant,
+        },
+        cache: "no-store",
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]),
+      },
+    );
+    if (!alive.current || current !== generation.current)
+      throw Error("Cancelled");
+    if (response.status === 401) onUnauthorized();
+    if (!response.ok) throw Error("Read denied");
+    const payload: unknown = await response.json();
+    if (!alive.current || current !== generation.current)
+      throw Error("Cancelled");
+    if (!payload || typeof payload !== "object" || Array.isArray(payload))
+      throw Error("Invalid response");
+    const metadata = parseVersions(
+      { value: [payload] },
+      "secrets",
+      connection,
+      name,
+    );
+    const secret = (payload as { value?: unknown }).value;
+    if (
+      metadata[0]?.version !== version ||
+      typeof secret !== "string" ||
+      new TextEncoder().encode(secret).length > 25600
+    )
+      throw Error("Invalid response");
+    return secret;
+  }
   async function show() {
     hide();
     const current = generation.current,
@@ -58,42 +100,8 @@ export function SecretVersionValue({
     request.current = controller;
     setLoading(true);
     try {
-      const response = await fetch(
-        `/api/vault/secrets/${encodeURIComponent(name)}/${encodeURIComponent(version)}`,
-        {
-          headers: {
-            "x-vault-token": connection.token,
-            "x-vault-environment": connection.environment,
-            "x-vault-tenant": connection.tenant,
-          },
-          cache: "no-store",
-          signal: AbortSignal.any([
-            controller.signal,
-            AbortSignal.timeout(8000),
-          ]),
-        },
-      );
-      if (!alive.current || current !== generation.current) return;
-      if (response.status === 401) onUnauthorized();
-      if (!response.ok) throw Error("Read denied");
-      const payload: unknown = await response.json();
-      if (!alive.current || current !== generation.current) return;
-      if (!payload || typeof payload !== "object" || Array.isArray(payload))
-        throw Error("Invalid response");
-      const metadata = parseVersions(
-        { value: [payload] },
-        "secrets",
-        connection,
-        name,
-      );
-      const secret = (payload as { value?: unknown }).value;
-      if (
-        metadata[0]?.version !== version ||
-        typeof secret !== "string" ||
-        new TextEncoder().encode(secret).length > 25600
-      )
-        throw Error("Invalid response");
-      setValue(secret);
+      const secret = await readSecret(current, controller);
+      if (alive.current && current === generation.current) setValue(secret);
     } catch {
       if (alive.current && current === generation.current)
         setError(
@@ -104,20 +112,62 @@ export function SecretVersionValue({
     }
   }
   async function copy() {
-    if (value === undefined) return;
-    const current = generation.current;
+    if (loading) return;
+    const current = ++generation.current,
+      controller = new AbortController();
+    request.current?.abort();
+    request.current = controller;
     setMessage("");
     setError("");
+    setLoading(true);
+    setCopying(true);
     try {
-      if (!navigator.clipboard?.writeText) throw Error("Clipboard unavailable");
-      await navigator.clipboard.writeText(value);
+      const clipboard = navigator.clipboard;
+      const canWriteItem =
+        typeof clipboard?.write === "function" &&
+        typeof ClipboardItem !== "undefined";
+      if (
+        !clipboard ||
+        (typeof clipboard.writeText !== "function" && !canWriteItem)
+      )
+        throw Error("Clipboard unavailable");
+      const secret =
+        value === undefined
+          ? readSecret(current, controller)
+          : Promise.resolve(value);
+      // ClipboardItem starts the browser clipboard operation inside the click gesture,
+      // while the scoped read resolves. Never put a hidden copy in displayed state.
+      void secret.catch(() => {});
+      if (
+        canWriteItem &&
+        (value === undefined || typeof clipboard.writeText !== "function")
+      ) {
+        const blob = secret.then((text) => {
+          if (!alive.current || current !== generation.current)
+            throw Error("Cancelled");
+          return new Blob([text], { type: "text/plain" });
+        });
+        void blob.catch(() => {});
+        const item = new ClipboardItem({ "text/plain": blob });
+        await clipboard.write([item]);
+      } else {
+        const text = await secret;
+        if (!alive.current || current !== generation.current) return;
+        await clipboard.writeText(text);
+      }
       if (alive.current && current === generation.current)
         setMessage("Copied. The clipboard retains the value until replaced.");
     } catch {
+      controller.abort();
       if (alive.current && current === generation.current)
         setError(
-          "Could not copy. Check clipboard permission or select the shown value manually.",
+          "Could not copy this version. Check read permission, validity dates and clipboard permission. You can also Show and select the value manually.",
         );
+    } finally {
+      if (alive.current && current === generation.current) {
+        setLoading(false);
+        setCopying(false);
+      }
     }
   }
   return (
@@ -129,18 +179,14 @@ export function SecretVersionValue({
           onClick={() => (value === undefined ? void show() : hide())}
           aria-expanded={value !== undefined}
         >
-          {loading
+          {loading && !copying
             ? "Reading…"
             : value === undefined
               ? "Show secret value"
               : "Hide secret value"}
         </button>
-        <button
-          type="button"
-          disabled={value === undefined || loading}
-          onClick={() => void copy()}
-        >
-          Copy secret value
+        <button type="button" disabled={loading} onClick={() => void copy()}>
+          {copying ? "Copying…" : "Copy secret value"}
         </button>
       </div>
       <label className="field">
