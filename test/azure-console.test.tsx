@@ -617,3 +617,71 @@ test("typing searches after three characters without clearing the existing rows 
   });
   await waitFor(() => assert.ok(calls.length > count + 1));
 });
+test("secret rows provide hidden copy and display metadata version counts", async () => {
+  let copied = "";
+  const row = {
+    name: "demo",
+    kind: "secret",
+    id: id.slice(0, -1).replace("/demo", "/demo"),
+    version: "v1",
+    versionId: id + "v1",
+    versionCount: 2,
+    attributes: { enabled: true },
+    tags: { purpose: "Demo secret" },
+  };
+  row.id = "http://127.0.0.1:4000/namespaces/development/club-a/secrets/demo";
+  setup(async (url) =>
+    url.endsWith("/demo/v1")
+      ? Response.json({
+          id: id + "v1",
+          value: "row-secret",
+          attributes: { enabled: true },
+        })
+      : Response.json({ value: [row] }),
+  );
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: {
+      writeText: async (value: string) => {
+        copied = value;
+      },
+    },
+  });
+  await secrets();
+  const button = await screen.findByRole("button", {
+    name: "Copy secret value for Demo secret (demo)",
+  });
+  assert.ok(screen.getByRole("columnheader", { name: "Copy" }));
+  assert.ok(screen.getByRole("cell", { name: "2" }));
+  assert.equal(
+    calls.some((c) => c.url.endsWith("/demo/v1")),
+    false,
+  );
+  fireEvent.click(button);
+  await screen.findByText("Copied");
+  assert.equal(copied, "row-secret");
+  assert.equal(document.body.textContent?.includes("row-secret"), false);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: undefined,
+  });
+});
+test("older API missing version count uses metadata history without reading secret values", async () => {
+  const row = {
+    name: "demo",
+    kind: "secret",
+    id: "http://127.0.0.1:4000/namespaces/development/club-a/secrets/demo",
+    version: "v2",
+    versionId: id + "v2",
+    attributes: { enabled: true },
+  };
+  setup(async (url) =>
+    Response.json(url.endsWith("/versions") ? versions : { value: [row] }),
+  );
+  await secrets();
+  await screen.findByRole("cell", { name: "2" });
+  assert.equal(
+    calls.some((c) => c.url.endsWith("/demo/v2")),
+    false,
+  );
+});

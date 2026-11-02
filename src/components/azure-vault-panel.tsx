@@ -157,6 +157,43 @@ export function AzureVaultPanel({
       setRows((prev) => (append ? [...prev, ...page.rows] : page.rows));
       setNext(page.nextLink);
     }
+    // Older API versions omit counts. Only then read metadata history, four at a time.
+    const missing = page.rows.filter(
+      (row) => row.kind === "secret" && row.versionCount === undefined,
+    );
+    for (
+      let offset = 0;
+      offset < missing.length && current(task);
+      offset += 4
+    ) {
+      const counts = await Promise.all(
+        missing.slice(offset, offset + 4).map(async (row) => {
+          try {
+            const data = await request(task, `secrets/${row.name}/versions`);
+            const versions = parseVersions(
+              data,
+              "secrets",
+              connection,
+              row.name,
+            );
+            return versions.length
+              ? { name: row.name, version: row.version, count: versions.length }
+              : undefined;
+          } catch {
+            return undefined;
+          } // A list grant need not include history read permission.
+        }),
+      );
+      if (current(task))
+        setRows((previous) =>
+          previous.map((row) => {
+            const count = counts.find(
+              (item) => item?.name === row.name && item.version === row.version,
+            );
+            return count ? { ...row, versionCount: count.count } : row;
+          }),
+        );
+    }
   }
   async function refreshList(path?: string, append = false) {
     if (!path && search.length > 0 && search.length < 3) return;
@@ -572,7 +609,12 @@ export function AzureVaultPanel({
               <thead>
                 <tr>
                   <th>Name</th>
-                  {kind === "secrets" && <th>Versions</th>}
+                  {kind === "secrets" && (
+                    <>
+                      <th>Copy</th>
+                      <th>Versions</th>
+                    </>
+                  )}
                   <th>Status</th>
                   <th>Updated (UTC)</th>
                 </tr>
@@ -591,7 +633,29 @@ export function AzureVaultPanel({
                       )}
                     </td>
                     {kind === "secrets" && (
-                      <td data-label="Versions">{row.versionCount ?? "—"}</td>
+                      <>
+                        <td data-label="Copy">
+                          <SecretVersionValue
+                            compact
+                            key={`${row.name}/${row.version}/${epoch.current}`}
+                            connection={connection}
+                            name={row.name}
+                            version={row.version}
+                            onUnauthorized={onUnauthorized}
+                            copyLabel={`Copy secret value for ${row.purpose && row.purpose !== row.name ? `${row.purpose} (${row.name})` : row.name}`}
+                          />
+                        </td>
+                        <td
+                          data-label="Versions"
+                          title={
+                            row.versionCount === undefined
+                              ? "Version count unavailable. Update the API or allow metadata history reads."
+                              : undefined
+                          }
+                        >
+                          {row.versionCount ?? "—"}
+                        </td>
+                      </>
                     )}
                     <td data-label="Status">
                       {lifecycle({

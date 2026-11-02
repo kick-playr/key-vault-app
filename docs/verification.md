@@ -102,3 +102,11 @@ The new fake-clock regression failed before implementation and now confirms the 
 Azure-style Keys/Secrets action buttons now share green backgrounds, green borders and white text, including Search, Generate/Import, Refresh, value actions and the toolbar disclosure. Removed the white value-action override. Selected version actions use a darker green; compact resource-name links retain green text on their transparent background so they remain readable. Disabled/focus styles remain in place.
 
 CSS-only change. All71 tests, typecheck, production build and diff check pass. Generated next-env.d.ts preserved. No API, service/restart/live clipboard/vault or deployment changes; rendered visual verification remains unverified.
+
+## Secret-list copy/count columns — release 0.1.11 (2026-11-02)
+
+Added a compact copy-only mode to the existing validated secret-version component and a Copy column to secret results. Each row targets its physical name and exact listed version, with no value read until explicit Copy and no displayed value field. Accessible labels distinguish duplicate purposes using physical names. Existing green action styling and three-second Copied feedback are reused.
+
+Versions uses API versionCount. For older responses only, visible secret rows missing counts fetch metadata history in batches of at most four. Lists render before fallback counts arrive; namespace/version validation, task cancellation and read authorization remain. A denied/unavailable history read leaves a dash and tooltip, never a guessed count. Updated API rows skip fallback requests. No API modification or service restart needed for compatibility.
+
+Two new integration regressions failed before implementation. Full73 tests, typecheck, production build and diff check pass, covering row-level exact hidden copying, count display and metadata-only fallback. No actual clipboard/vault operation or deployment. Generated next-env.d.ts preserved.

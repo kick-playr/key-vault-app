@@ -6,12 +6,16 @@ interface Props {
   name: string;
   version: string;
   onUnauthorized: () => void;
+  compact?: boolean;
+  copyLabel?: string;
 }
 export function SecretVersionValue({
   connection,
   name,
   version,
   onUnauthorized,
+  compact = false,
+  copyLabel = "Copy secret value",
 }: Props) {
   const [value, setValue] = useState<string>(),
     [loading, setLoading] = useState(false),
@@ -185,24 +189,32 @@ export function SecretVersionValue({
     }
   }
   return (
-    <div className="secret-version-value">
+    <div
+      className={
+        compact
+          ? "secret-version-value secret-copy-inline"
+          : "secret-version-value"
+      }
+    >
       <div className="azure-toolbar">
-        <button
-          type="button"
-          disabled={loading && value === undefined}
-          onClick={() => (value === undefined ? void show() : hide())}
-          aria-expanded={value !== undefined}
-        >
-          {loading && !copying
-            ? "Reading…"
-            : value === undefined
-              ? "Show secret value"
-              : "Hide secret value"}
-        </button>
+        {!compact && (
+          <button
+            type="button"
+            disabled={loading && value === undefined}
+            onClick={() => (value === undefined ? void show() : hide())}
+            aria-expanded={value !== undefined}
+          >
+            {loading && !copying
+              ? "Reading…"
+              : value === undefined
+                ? "Show secret value"
+                : "Hide secret value"}
+          </button>
+        )}
         <button
           type="button"
           className="secret-copy-button"
-          aria-label="Copy secret value"
+          aria-label={copyLabel}
           disabled={loading}
           onClick={() => void copy()}
         >
@@ -215,14 +227,21 @@ export function SecretVersionValue({
           )}
         </button>
       </div>
-      <label className="field">
-        Selected version secret value
-        {value === undefined ? (
-          <input type="password" readOnly value="••••••••" autoComplete="off" />
-        ) : (
-          <textarea readOnly value={value} rows={3} spellCheck={false} />
-        )}
-      </label>
+      {!compact && (
+        <label className="field">
+          Selected version secret value
+          {value === undefined ? (
+            <input
+              type="password"
+              readOnly
+              value="••••••••"
+              autoComplete="off"
+            />
+          ) : (
+            <textarea readOnly value={value} rows={3} spellCheck={false} />
+          )}
+        </label>
+      )}
       {copied && (
         <p role="status" className="sr-only">
           Secret value copied to clipboard.

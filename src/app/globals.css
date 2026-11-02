@@ -1246,3 +1246,20 @@ main {
   min-width: 72px;
   font-size: 14px;
 }
+.secret-copy-inline {
+  gap: 4px;
+  max-width: 160px;
+}
+.secret-copy-inline .azure-toolbar {
+  gap: 0;
+}
+.azure-table td .secret-copy-button {
+  background: var(--green);
+  color: white;
+  border: 1px solid var(--green);
+  padding: 4px 8px;
+  min-height: 28px;
+}
+.secret-copy-inline .error {
+  font-size: 12px;
+}
