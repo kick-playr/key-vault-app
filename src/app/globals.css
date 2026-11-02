@@ -1184,3 +1184,19 @@ main {
     padding: 3px 6px;
   }
 }
+.secret-version-value {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.secret-version-value .azure-toolbar > button:first-child {
+  background: var(--surface);
+  color: var(--green);
+}
+.secret-version-value .field {
+  margin: 0;
+}
+.secret-version-value textarea {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

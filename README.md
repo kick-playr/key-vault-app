@@ -77,3 +77,9 @@ Dirty input requires Stay/Discard before leaving. A failed request retains the f
 Resource lists show the `purpose` tag as the main name when present, with the physical resource name underneath. Untagged resources keep their physical name. Selection, history and writes still use the physical identifier; no stored resources are renamed. Version detail headings show that version's purpose when present.
 
 Azure-style search now matches a case-insensitive partial name **or** purpose, including spaces/punctuation, across all matching resources before pagination. The fallback Filtered inventory also offers a Name or purpose field; existing exact-name/prefix/purpose filters remain available as additional AND constraints. Requires the API 0.1.4 optional `search` query; update the API first. These commits do not deploy or restart either service.
+
+## Selected secret values — 0.1.6 (2026-11-02)
+
+Selected secret-version details and Edit metadata include a value panel that starts hidden. **Show secret value** reads that exact version with the existing scoped read permission; no value is fetched just by opening the editor. **Hide secret value** clears it from the panel; **Copy secret value** copies the exact revealed string, including original line endings. Copy requires clipboard permission and does not clear the system clipboard afterwards. Switching versions/views, refreshing, leaving the page or hiding the browser tab clears the revealed panel and rejects late responses.
+
+The shown value is read-only. Existing version metadata remains editable; changing secret content uses **New version**, preserving history. Disabled, expired, future or unauthorized versions cannot bypass server read restrictions. Values remain transient, with no browser storage or payload logging.

@@ -530,3 +530,50 @@ test("shows purpose as name while opening the physical resource and searching ei
     ),
   );
 });
+test("selected secret version can be revealed and metadata editor starts hidden without another value read", async () => {
+  setup(async (url) =>
+    url.endsWith("/versions")
+      ? Response.json(versions)
+      : url.endsWith("/secrets/demo/v1")
+        ? Response.json({
+            id: id + "v1",
+            value: "synthetic-selected-value",
+            attributes: { enabled: true },
+          })
+        : Response.json({ value: [] }),
+  );
+  await secrets();
+  fireEvent.click(screen.getByText("Open by name…"));
+  fireEvent.change(screen.getByLabelText("Open by name"), {
+    target: { value: "demo" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Open versions" }));
+  await screen.findByText("CURRENT VERSION");
+  fireEvent.click(screen.getByRole("button", { name: "Version v1" }));
+  assert.equal(
+    calls.some((c) => c.url.endsWith("/secrets/demo/v1")),
+    false,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Show secret value" }));
+  await screen.findByRole("button", { name: "Hide secret value" });
+  assert.equal(
+    (
+      screen.getByLabelText(
+        "Selected version secret value",
+      ) as HTMLTextAreaElement
+    ).value,
+    "synthetic-selected-value",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Edit metadata" }));
+  await screen.findByRole("button", { name: "Save metadata" });
+  assert.ok(screen.getByRole("button", { name: "Show secret value" }));
+  assert.equal(
+    (screen.getByLabelText("Selected version secret value") as HTMLInputElement)
+      .type,
+    "password",
+  );
+  assert.equal(
+    calls.filter((c) => c.url.endsWith("/secrets/demo/v1")).length,
+    1,
+  );
+});

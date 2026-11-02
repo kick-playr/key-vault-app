@@ -18,6 +18,7 @@ interface Props {
   onSubmit: (request: VaultRequest) => Promise<boolean>;
   onCancel: () => void;
   onDirty: (dirty: boolean) => void;
+  valuePanel?: React.ReactNode;
 }
 const dateInput = (n?: number) =>
   n === undefined || n > 253402300799
@@ -30,6 +31,7 @@ export function AzureVaultForm({
   onSubmit,
   onCancel,
   onDirty,
+  valuePanel,
 }: Props) {
   const editing = mode === "edit-metadata",
     key = mode === "create-key";
@@ -189,6 +191,7 @@ export function AzureVaultForm({
           1–127 letters, digits or hyphens. An existing name creates another
           version.
         </p>
+        {editing && valuePanel}
         {!editing && !key && (
           <>
             <label className="field">

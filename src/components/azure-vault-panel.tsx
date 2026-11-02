@@ -1,3 +1,4 @@
+import { SecretVersionValue } from "./secret-version-value";
 import { DiscardDialog } from "./discard-dialog";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -348,6 +349,17 @@ export function AzureVaultPanel({
           }
           onSubmit={submit}
           onDirty={markDirty}
+          valuePanel={
+            selected && (
+              <SecretVersionValue
+                key={`${name}/${selected.version}/${epoch.current}`}
+                connection={connection}
+                name={name}
+                version={selected.version}
+                onUnauthorized={onUnauthorized}
+              />
+            )
+          }
           onCancel={() =>
             leave(() => {
               markDirty(false);
@@ -490,6 +502,15 @@ export function AzureVaultPanel({
                         </React.Fragment>
                       ))}
                     </dl>
+                  )}
+                  {kind === "secrets" && (
+                    <SecretVersionValue
+                      key={`${name}/${selected.version}/${epoch.current}`}
+                      connection={connection}
+                      name={name}
+                      version={selected.version}
+                      onUnauthorized={onUnauthorized}
+                    />
                   )}
                   {kind === "secrets" && (
                     <button
