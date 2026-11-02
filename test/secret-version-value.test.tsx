@@ -343,3 +343,22 @@ test("a revealed value can still be hidden while clipboard permission is pending
   await act(async () => finishCopy());
   assert.equal(screen.queryByText(/Copied/), null);
 });
+test("copy icon becomes Copied only after success and returns after exactly three seconds", async (t) => {
+  globalThis.fetch = async () =>
+    Response.json({ id, value: "fixture", attributes: { enabled: true } });
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: async () => {} },
+  });
+  render(panel());
+  const button = screen.getByRole("button", { name: "Copy secret value" });
+  assert.ok(button.querySelector("svg"));
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  await act(async () => fireEvent.click(button));
+  assert.equal(button.textContent, "Copied");
+  await act(async () => t.mock.timers.tick(2999));
+  assert.equal(button.textContent, "Copied");
+  await act(async () => t.mock.timers.tick(1));
+  assert.ok(button.querySelector("svg"));
+  assert.equal(button.textContent, "");
+});

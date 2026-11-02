@@ -1,3 +1,4 @@
+import { DocumentDuplicateIcon } from "@heroicons/react/24/outline";
 import React, { useEffect, useRef, useState } from "react";
 import { parseVersions } from "../lib/azure-vault";
 interface Props {
@@ -15,17 +16,23 @@ export function SecretVersionValue({
   const [value, setValue] = useState<string>(),
     [loading, setLoading] = useState(false),
     [copying, setCopying] = useState(false),
-    [message, setMessage] = useState(""),
+    [copied, setCopied] = useState(false),
     [error, setError] = useState("");
   const generation = useRef(0),
     request = useRef<AbortController | null>(null),
     alive = useRef(true);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const identity = JSON.stringify([
     connection.environment,
     connection.tenant,
     name,
     version,
   ]);
+  function clearCopied() {
+    if (copiedTimer.current !== null) clearTimeout(copiedTimer.current);
+    copiedTimer.current = null;
+    setCopied(false);
+  }
   function hide() {
     generation.current++;
     request.current?.abort();
@@ -33,7 +40,7 @@ export function SecretVersionValue({
     setValue(undefined);
     setLoading(false);
     setCopying(false);
-    setMessage("");
+    clearCopied();
     setError("");
   }
   useEffect(() => {
@@ -47,6 +54,8 @@ export function SecretVersionValue({
     document.addEventListener("visibilitychange", visibility);
     return () => {
       alive.current = false;
+      if (copiedTimer.current !== null) clearTimeout(copiedTimer.current);
+      copiedTimer.current = null;
       generation.current++;
       request.current?.abort();
       window.removeEventListener("pagehide", clear);
@@ -117,7 +126,7 @@ export function SecretVersionValue({
       controller = new AbortController();
     request.current?.abort();
     request.current = controller;
-    setMessage("");
+    clearCopied();
     setError("");
     setLoading(true);
     setCopying(true);
@@ -155,8 +164,13 @@ export function SecretVersionValue({
         if (!alive.current || current !== generation.current) return;
         await clipboard.writeText(text);
       }
-      if (alive.current && current === generation.current)
-        setMessage("Copied. The clipboard retains the value until replaced.");
+      if (alive.current && current === generation.current) {
+        setCopied(true);
+        copiedTimer.current = setTimeout(() => {
+          copiedTimer.current = null;
+          if (alive.current && current === generation.current) setCopied(false);
+        }, 3000);
+      }
     } catch {
       controller.abort();
       if (alive.current && current === generation.current)
@@ -185,8 +199,20 @@ export function SecretVersionValue({
               ? "Show secret value"
               : "Hide secret value"}
         </button>
-        <button type="button" disabled={loading} onClick={() => void copy()}>
-          {copying ? "Copying…" : "Copy secret value"}
+        <button
+          type="button"
+          className="secret-copy-button"
+          aria-label="Copy secret value"
+          disabled={loading}
+          onClick={() => void copy()}
+        >
+          {copying ? (
+            "Copying…"
+          ) : copied ? (
+            "Copied"
+          ) : (
+            <DocumentDuplicateIcon aria-hidden="true" />
+          )}
         </button>
       </div>
       <label className="field">
@@ -197,7 +223,11 @@ export function SecretVersionValue({
           <textarea readOnly value={value} rows={3} spellCheck={false} />
         )}
       </label>
-      {message && <p role="status">{message}</p>}
+      {copied && (
+        <p role="status" className="sr-only">
+          Secret value copied to clipboard.
+        </p>
+      )}
       {error && (
         <p role="alert" className="error">
           {error}

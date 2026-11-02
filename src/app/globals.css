@@ -1239,3 +1239,10 @@ main {
   background: var(--surface);
   box-shadow: 0 6px 20px #172b361a;
 }
+.secret-version-value .secret-copy-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  font-size: 14px;
+}

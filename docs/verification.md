@@ -90,3 +90,9 @@ Full70 app tests, typecheck, production build and diff check passed. Regression 
 Per user annotated screenshot ce4ddf0d, list pages no longer repeat the breadcrumb and inner resource heading. The inner heading and table caption retain screen-reader semantics without visible spacing; resource/detail context remains visible after selection. Search/create/refresh and an accessible ellipsis disclosure share one toolbar, with open-by-name fields in its on-demand panel. Padding is16px and grid gap10px for both Keys and Secrets. Loading/search announcements no longer add visible rows. Search behavior, counts, actions and API are unchanged.
 
 All70 tests, typecheck, production build and diff check passed. Existing open-by-name tests now activate the actual native summary element. Rendered viewport QA remains unverified; generated next-env.d.ts edit preserved. Work directly on development; no API changes, services/restarts/live operations/deployment.
+
+## Timed copy feedback — release 0.1.9 (2026-11-02)
+
+Copy uses the Heroicons DocumentDuplicate icon with an accessible Copy secret value label. Successful writes replace the icon with Copied for3000ms, then restore it. Starting another operation, hiding/leaving or unmounting clears feedback/timer; failures never show success. A screen-reader status announces the copy without duplicating visible text. Existing hidden-copy and permission boundaries remain unchanged.
+
+The new fake-clock regression failed before implementation and now confirms the icon initially, Copied through2999ms, and icon restored at3000ms. All71 tests, typecheck, production build and diff check passed. Generated next-env.d.ts preserved; no actual clipboard/vault operation, service restart or deployment.
