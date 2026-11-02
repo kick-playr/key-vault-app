@@ -308,12 +308,17 @@ export function AzureVaultPanel({
       className="panel azure-panel"
       aria-label={`${kind === "keys" ? "Keys" : "Secrets"} Azure-style workspace`}
     >
-      <p className="muted azure-breadcrumb">
-        Vault / {kind === "keys" ? "Keys" : "Secrets"}
-        {name ? ` / ${name}` : ""}
-        {selected ? ` / ${selected.version}` : ""}
-      </p>
-      <h2 ref={heading} tabIndex={-1}>
+      {name && (
+        <p className="muted azure-breadcrumb">
+          Vault / {kind === "keys" ? "Keys" : "Secrets"} / {name}
+          {selected ? ` / ${selected.version}` : ""}
+        </p>
+      )}
+      <h2
+        ref={heading}
+        tabIndex={-1}
+        className={name && !mode ? undefined : "sr-only"}
+      >
         {mode
           ? mode === "edit-metadata"
             ? "Edit metadata"
@@ -336,16 +341,9 @@ export function AzureVaultPanel({
           {error}
         </p>
       )}
-      {searchPending && !busy && (
-        <p role="status" className="muted">
-          Searching…
-        </p>
-      )}
-      {busy && (
-        <p role="status" className="muted">
-          Loading…
-        </p>
-      )}
+      <p role="status" className="sr-only">
+        {busy ? "Loading…" : searchPending ? "Searching…" : ""}
+      </p>
       {pending && (
         <DiscardDialog
           onStay={() => setPending(undefined)}
@@ -465,34 +463,37 @@ export function AzureVaultPanel({
                 </button>
               </>
             )}
+            <details className="azure-open-by-name">
+              <summary title="Open by name">
+                <span aria-hidden="true">…</span>
+                <span className="sr-only">Open by name…</span>
+              </summary>
+              <form
+                className="azure-open-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void loadHistory(nameInput);
+                }}
+              >
+                <label className="field">
+                  Open by name
+                  <input
+                    value={nameInput}
+                    required
+                    maxLength={127}
+                    pattern="[A-Za-z0-9-]{1,127}"
+                    onChange={(e) => setNameInput(e.target.value)}
+                  />
+                </label>
+                <button disabled={busy}>Open versions</button>
+              </form>
+            </details>
           </div>
           {search.length > 0 && search.length < 3 && (
             <p className="muted">
               Type at least 3 characters to search by name or purpose.
             </p>
           )}
-          <details className="azure-open-by-name">
-            <summary>Open by name…</summary>
-            <form
-              className="azure-open-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void loadHistory(nameInput);
-              }}
-            >
-              <label className="field">
-                Open by name
-                <input
-                  value={nameInput}
-                  required
-                  maxLength={127}
-                  pattern="[A-Za-z0-9-]{1,127}"
-                  onChange={(e) => setNameInput(e.target.value)}
-                />
-              </label>
-              <button disabled={busy}>Open versions</button>
-            </form>
-          </details>
           {history.length > 0 && (
             <div className="azure-history">
               <h3>CURRENT VERSION</h3>
@@ -567,7 +568,7 @@ export function AzureVaultPanel({
             )}
           {!!rows.length && (
             <table className="azure-table">
-              <caption>Latest resource metadata</caption>
+              <caption className="sr-only">Latest resource metadata</caption>
               <thead>
                 <tr>
                   <th>Name</th>
