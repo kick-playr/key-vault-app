@@ -471,7 +471,7 @@ export function RuntimeConfigurationPanel({
                 </button>
               </form>
             </details>
-            <table className="applications-catalog-table">
+            <table className="applications-catalog-table runtime-tenants-table">
               <thead>
                 <tr>
                   <th>Tenant</th>
