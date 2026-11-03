@@ -256,8 +256,9 @@ function ApplicationTenantAccess({
             </button>
           )}
           <p>
-            Runtime adoption remains pending until a fresh consumer report
-            confirms it. Legacy applications require the compatible live runtime
+            Binding adoption remains pending until a fresh consumer report
+            confirms it. Provider connections and business routes may still be
+            pending. Legacy applications require the compatible live runtime
             to be installed and explicitly enabled.
           </p>
         </>

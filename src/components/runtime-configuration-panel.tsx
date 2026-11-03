@@ -487,7 +487,7 @@ export function RuntimeConfigurationPanel({
             <h2>Review and save</h2>
             <p role="status">
               {published
-                ? "Published metadata — consumer adoption is confirmed only by fresh reports."
+                ? "Published metadata — binding adoption is confirmed only by fresh reports."
                 : "Not published — review this metadata draft and Save to publish startup manifests."}
             </p>
             <p>
@@ -501,7 +501,7 @@ export function RuntimeConfigurationPanel({
               .
             </p>
             <p>
-              Tenant adoption is pending until authenticated consumer reports
+              Binding adoption is pending until authenticated consumer reports
               confirm it. Check application reports below. Business tenant
               provisioning and separately authorized runtime identities are
               required.
@@ -541,7 +541,7 @@ export function RuntimeConfigurationPanel({
                   generations.current = {};
                   mark(false);
                   setNotice(
-                    "Saved configuration. Check consumer reports for runtime adoption.",
+                    "Saved configuration. Check consumer reports for binding adoption.",
                   );
                 })
               }
@@ -914,7 +914,7 @@ function TenantRuntimeReports({
               const label =
                 status.state === "applied" &&
                 fresh.some((i) => i.status === "applied")
-                  ? "Ready (consumer reported)"
+                  ? "Bindings adopted (consumer reported)"
                   : status.state === "updating"
                     ? "Loading (consumer reported)"
                     : ["blocked", "warning"].includes(status.state)
@@ -946,8 +946,9 @@ function TenantRuntimeReports({
     <section aria-label="Tenant runtime reports">
       <h3>Tenant runtime reports</h3>
       <p>
-        Authenticated consumer reports are observations, not independent
-        attestations. Existing business tenant provisioning is required.
+        This reports Vault binding adoption only. Tenant provisioning, provider
+        connections and business route readiness may still be pending. Consumer
+        reports are observations, not independent attestations.
       </p>
       {applications.map((slug) => (
         <p role="status" key={slug}>

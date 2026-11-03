@@ -199,7 +199,7 @@ test("409 keeps the draft and disables repeat Save until reload", async () => {
     "OTHER",
   );
 });
-test("Ready requires a fresh scoped consumer report rather than a metadata save", async () => {
+test("binding adoption requires a fresh scoped consumer report rather than a metadata save", async () => {
   const calls: string[] = [];
   globalThis.fetch = async (input, init) => {
     const path = String(input);
@@ -237,7 +237,8 @@ test("Ready requires a fresh scoped consumer report rather than a metadata save"
   render(<RuntimeConfigurationPanel connection={connection} />);
   await screen.findByText("fcrww");
   fireEvent.click(screen.getByText("fcrww"));
-  await screen.findByText("Club API: Ready (consumer reported)");
+  await screen.findByText("Club API: Bindings adopted (consumer reported)");
+  assert.ok(screen.getByText(/reports Vault binding adoption only/));
   assert.ok(calls.includes("/api/vault/local/applications/club-api/status"));
 });
 
@@ -680,7 +681,7 @@ test("an unpublished revision zero seed never implies Ready from earlier reports
   await screen.findByText(/Not published/);
   fireEvent.click(screen.getByText("fcrww"));
   await screen.findByText("Club API: Pending — configuration not published");
-  assert.equal(screen.queryByText("Club API: Ready (consumer reported)"), null);
+  assert.equal(screen.queryByText("Club API: Bindings adopted (consumer reported)"), null);
 });
 
 test("Club API provider capability is unchecked by default and sent only after explicit selection", async () => {
