@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
+import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/24/outline";
 import { DiscardDialog } from "./discard-dialog";
 import { RuntimeAccessPanel } from "./runtime-access-panel";
 import { parseRuntimeStatus } from "../lib/applications";
@@ -482,6 +483,7 @@ export function RuntimeConfigurationPanel({
                   <th>Tenant</th>
                   <th>Assigned applications</th>
                   <th>Inherited bindings</th>
+                  <th aria-label="Expand or collapse tenant" />
                 </tr>
               </thead>
               <tbody>
@@ -490,27 +492,29 @@ export function RuntimeConfigurationPanel({
                     <td>
                       <button
                         className="secondary-button"
-                        onClick={() => setSelectedTenant(t.tenant)}
+                        onClick={() => setSelectedTenant(selectedTenant === t.tenant ? "" : t.tenant)}
                       >
                         {t.tenant}
                       </button>
-                      <form
-                        className="runtime-tenant-load"
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          const input = e.currentTarget.elements.namedItem("grant") as HTMLInputElement;
-                          const token = input.value || credentials.current[t.tenant] || connection.token;
-                          input.value = "";
-                          loadTenant(t.tenant, token);
-                        }}
-                      >
-                        <label>
-                          Grant
-                          <input name="grant" aria-label={"Grant for " + t.tenant}
-                            type="password" autoComplete="off" spellCheck={false} />
-                        </label>
-                        <button className="secondary-button" disabled={busy}>Load</button>
-                      </form>
+                      {selectedTenant === t.tenant && (
+                        <form
+                          className="runtime-tenant-load"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            const input = e.currentTarget.elements.namedItem("grant") as HTMLInputElement;
+                            const token = input.value || credentials.current[t.tenant] || connection.token;
+                            input.value = "";
+                            loadTenant(t.tenant, token);
+                          }}
+                        >
+                          <label>
+                            Grant
+                            <input name="grant" aria-label={"Grant for " + t.tenant}
+                              type="password" autoComplete="off" spellCheck={false} />
+                          </label>
+                          <button className="secondary-button" disabled={busy}>Load</button>
+                        </form>
+                      )}
                     </td>
                     <td>
                       {t.applications
@@ -520,13 +524,27 @@ export function RuntimeConfigurationPanel({
                     <td>
                       {t.secrets.length} secrets, {t.keySets.length} key sets
                     </td>
+                    <td className="runtime-tenant-actions">
+                      <button
+                        type="button"
+                        className="runtime-tenant-toggle"
+                        aria-label={`${selectedTenant === t.tenant ? "Collapse" : "Expand"} ${t.tenant}`}
+                        aria-expanded={selectedTenant === t.tenant}
+                        aria-controls={`tenant-details-${t.tenant}`}
+                        onClick={() => setSelectedTenant(selectedTenant === t.tenant ? "" : t.tenant)}
+                      >
+                        {selectedTenant === t.tenant
+                          ? <ChevronUpIcon aria-hidden="true" />
+                          : <ChevronDownIcon aria-hidden="true" />}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
             {tenant && (
               <>
-                <section aria-label={"Bindings for " + tenant.tenant}>
+                <section id={`tenant-details-${tenant.tenant}`} aria-label={"Bindings for " + tenant.tenant}>
                   <h3>{tenant.tenant} assignments</h3>
                   <fieldset>
                     <legend>Assigned consumers</legend>

@@ -1408,3 +1408,26 @@ main {
   font-size: 12px;
   overflow-wrap: anywhere;
 }
+
+.runtime-tenants-table .runtime-tenant-actions {
+  width: 48px;
+  text-align: right;
+}
+.applications-layout .runtime-tenants-table .runtime-tenant-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+}
+.applications-layout .runtime-tenant-toggle:hover {
+  background: #eff6ff;
+}
+.runtime-tenant-toggle svg {
+  width: 20px;
+  height: 20px;
+}

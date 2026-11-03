@@ -703,6 +703,7 @@ test("existing tenant loads from its own grant field without retyping its name",
     return Response.json({revision:0, configuration:{...configuration,tenants:[{tenant:"fcrww",applications:["club-api"],secrets:[],keySets:[]}]}});
   };
   render(<RuntimeConfigurationPanel connection={connection} />);
+  fireEvent.click(await screen.findByRole("button",{name:"Expand fcrww"}));
   const grant = await screen.findByLabelText("Grant for fcrww") as HTMLInputElement;
   fireEvent.change(grant,{target:{value:"tenant-row-grant-aaaaaaaaaaaaaaaaaaaaaaaa"}});
   fireEvent.click(screen.getByRole("button",{name:"Load"}));
@@ -719,4 +720,20 @@ test("runtime credential rows show readable names with technical purpose underne
   fireEvent.click(await screen.findByText("fcrww"));
   const title=await screen.findByText("Bexio OAuth credentials");
   assert.equal(title.closest("td")?.querySelector("small")?.textContent,purpose);
+});
+test("tenant expand control starts collapsed and toggles grant and details together", async () => {
+  globalThis.fetch=async()=>Response.json({revision:0,configuration:{...configuration,tenants:[{tenant:"fcrww",applications:["club-api"],secrets:[],keySets:[]}]}});
+  render(<RuntimeConfigurationPanel connection={connection}/>);
+  const expand=await screen.findByRole("button",{name:"Expand fcrww"});
+  assert.equal(expand.getAttribute("aria-expanded"),"false");
+  assert.equal(screen.queryByLabelText("Grant for fcrww"),null);
+  assert.equal(screen.queryByRole("region",{name:"Bindings for fcrww"}),null);
+  fireEvent.click(expand);
+  assert.ok(screen.getByLabelText("Grant for fcrww"));
+  assert.ok(screen.getByRole("region",{name:"Bindings for fcrww"}));
+  const collapse=screen.getByRole("button",{name:"Collapse fcrww"});
+  assert.equal(collapse.getAttribute("aria-expanded"),"true");
+  fireEvent.click(collapse);
+  assert.equal(screen.queryByLabelText("Grant for fcrww"),null);
+  assert.equal(screen.queryByRole("region",{name:"Bindings for fcrww"}),null);
 });
