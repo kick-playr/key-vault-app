@@ -1,13 +1,12 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
-import { parseRuntimeStatus } from "../lib/applications";
 import { DiscardDialog } from "./discard-dialog";
 import { RuntimeAccessPanel } from "./runtime-access-panel";
-import { ApplicationsPanel } from "./applications-panel";
+import { parseRuntimeStatus } from "../lib/applications";
 import {
   parseConfiguration,
   parseTenant,
-  parseKeySets,
+  configurationReferences,
   exportConfiguration,
   type RuntimeConfigurationDocument,
   type SecretSelection,
@@ -15,79 +14,83 @@ import {
   type KeyPlan,
 } from "../lib/runtime-configuration";
 type Connection = { environment: string; tenant: string; token: string };
-function SecretBindings({
+function InheritedBindings({
   secrets,
-  onChange,
+  keySets = [],
 }: {
   secrets: SecretSelection[];
-  onChange: (s: SecretSelection[]) => void;
+  keySets?: KeyPlan[];
 }) {
   return (
     <>
-      {secrets.map((s, i) => (
-        <fieldset key={i}>
-          <legend>{s.purpose}</legend>
-          <label>
-            Purpose
-            <input
-              value={s.purpose}
-              onChange={(e) =>
-                onChange(
-                  secrets.map((v, n) =>
-                    n === i ? { ...v, purpose: e.target.value } : v,
-                  ),
-                )
-              }
-            />
-          </label>
-          <label>
-            ENV mapping
-            <input
-              value={s.mapping}
-              onChange={(e) =>
-                onChange(
-                  secrets.map((v, n) =>
-                    n === i ? { ...v, mapping: e.target.value } : v,
-                  ),
-                )
-              }
-            />
-          </label>
-          <label>
-            Version (latest or immutable pin)
-            <input
-              value={s.version ?? ""}
-              placeholder="Choose version — unresolved legacy selection"
-              onChange={(e) =>
-                onChange(
-                  secrets.map((v, n) =>
-                    n === i ? { ...v, version: e.target.value } : v,
-                  ),
-                )
-              }
-            />
-          </label>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => onChange(secrets.filter((_, n) => n !== i))}
+      {secrets.length ? (
+        <table
+          className="applications-catalog-table"
+          aria-label="Inherited secret bindings"
+        >
+          <thead>
+            <tr>
+              <th>Purpose</th>
+              <th>ENV mapping</th>
+              <th>Version policy</th>
+            </tr>
+          </thead>
+          <tbody>
+            {secrets.map((s, index) => (
+              <tr key={index}>
+                <td>{s.purpose}</td>
+                <td>
+                  <code>{s.mapping}</code>
+                </td>
+                <td>
+                  {s.version ?? "Canonical version resolved on publication"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p>No inherited secret bindings in this preview.</p>
+      )}
+      {keySets.map((key, index) => (
+        <div key={index}>
+          <h4>{key.reference}</h4>
+          <p>
+            Current wrapping label: <code>{key.currentWrappingVersion}</code>
+          </p>
+          <table
+            className="applications-catalog-table"
+            aria-label={"Inherited key roles for " + key.reference}
           >
-            Remove {s.purpose}
-          </button>
-        </fieldset>
+            <thead>
+              <tr>
+                <th>Role</th>
+                <th>ENV mapping</th>
+                <th>Vault version / policy</th>
+              </tr>
+            </thead>
+            <tbody>
+              {key.wrappingVersions.map((w, n) => (
+                <tr key={n}>
+                  <td>Wrapping · {w.keyVersion}</td>
+                  <td>{key.mappings?.wrapping ?? "Canonical mapping"}</td>
+                  <td>{w.vaultVersion ?? "Canonical version"}</td>
+                </tr>
+              ))}
+              <tr>
+                <td>Index</td>
+                <td>{key.mappings?.index ?? "Canonical mapping"}</td>
+                <td>{key.indexVersion ?? "Canonical version"}</td>
+              </tr>
+              <tr>
+                <td>Control</td>
+                <td>{key.mappings?.control ?? "Canonical mapping"}</td>
+                <td>{key.controlVersion ?? "Canonical version"}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       ))}
-      <button
-        type="button"
-        className="secondary-button"
-        onClick={() =>
-          onChange([
-            ...secrets,
-            { purpose: "", mapping: "", version: "latest" },
-          ])
-        }
-      >
-        Add secret binding
-      </button>
     </>
   );
 }
@@ -97,19 +100,25 @@ export function RuntimeConfigurationPanel({
   onUnauthorized,
 }: {
   connection: Connection;
-  onDirty?: (v: boolean) => void;
+  onDirty?: (value: boolean) => void;
   onUnauthorized?: () => void;
 }) {
   const [configuration, setConfiguration] =
-    useState<RuntimeConfigurationDocument>();
-  const [revision, setRevision] = useState(0),
+      useState<RuntimeConfigurationDocument>(),
+    [availableApplications, setAvailableApplications] = useState<
+      RuntimeConfigurationDocument["applications"]
+    >({});
+  const [selectedApps, setSelectedApps] = useState<string[]>([]),
+    [revision, setRevision] = useState(0),
+    [published, setPublished] = useState(false),
+    [selectedTenant, setSelectedTenant] = useState(""),
     [busy, setBusy] = useState(false),
+    [dirty, setDirty] = useState(false),
+    [conflict, setConflict] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
-    [dirty, setDirty] = useState(false),
-    [conflict, setConflict] = useState(false);
-  const [selected, setSelected] = useState(""),
-    [importText, setImportText] = useState(""),
+    [catalogError, setCatalogError] = useState("");
+  const [importText, setImportText] = useState(""),
     [preview, setPreview] = useState<RuntimeConfigurationDocument>(),
     [exportText, setExportText] = useState(""),
     [pending, setPending] = useState<() => void>();
@@ -118,21 +127,14 @@ export function RuntimeConfigurationPanel({
     credentials = useRef<Record<string, string>>({}),
     generations = useRef<Record<string, number>>({}),
     controller = useRef<AbortController | undefined>(undefined);
-  const [catalogOpen, setCatalogOpen] = useState(false);
-  const [published, setPublished] = useState(false);
-  const catalogDirty = useRef(false);
   const dirtyCallback = useRef(onDirty),
     unauthorized = useRef(onUnauthorized);
   dirtyCallback.current = onDirty;
   unauthorized.current = onUnauthorized;
   function mark(value: boolean) {
     setDirty(value);
-    dirtyCallback.current?.(value || catalogDirty.current);
+    dirtyCallback.current?.(value);
     setExportText("");
-  }
-  function edit(next: RuntimeConfigurationDocument) {
-    setConfiguration(next);
-    mark(true);
     setNotice("");
   }
   function guarded(action: () => void) {
@@ -147,46 +149,43 @@ export function RuntimeConfigurationPanel({
     token = connection.token,
   ) {
     const signal = controller.current?.signal;
-    const response = await fetch(
-      "/api/vault/local/runtime-configuration" + path,
-      {
-        method,
-        headers: {
-          "x-vault-environment": connection.environment,
-          "x-vault-tenant": tenant,
-          "x-vault-token": token,
-          ...(method === "PUT" || (method === "POST" && path === "/import")
-            ? { "x-vault-tenant-tokens": JSON.stringify(credentials.current) }
-            : {}),
-          ...(body ? { "content-type": "application/json" } : {}),
-        },
-        body: body ? JSON.stringify(body) : undefined,
-        signal: signal
-          ? AbortSignal.any([signal, AbortSignal.timeout(8000)])
-          : AbortSignal.timeout(8000),
-        cache: "no-store",
+    const response = await fetch("/api/vault/" + path, {
+      method,
+      headers: {
+        "x-vault-token": token,
+        "x-vault-environment": connection.environment,
+        "x-vault-tenant": tenant,
+        ...(method === "PUT" || method === "POST"
+          ? { "x-vault-tenant-tokens": JSON.stringify(credentials.current) }
+          : {}),
+        ...(body ? { "content-type": "application/json" } : {}),
       },
-    );
+      body: body ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(8000)])
+        : AbortSignal.timeout(8000),
+    });
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     if (!response.ok) {
       if (response.status === 401) unauthorized.current?.();
       if (response.status === 409) setConflict(true);
       throw Error(
         response.status === 409
-          ? "Revision conflict. Reload configuration and review your changes before saving."
+          ? "Revision conflict. Reload configuration and review assignments before saving."
           : response.status === 403
-            ? "The grant cannot access the selected namespace or resources."
-            : "Configuration request failed. Check permissions, bindings and versions; reload before retrying a write.",
+            ? "The grant cannot access the selected namespace or canonical definitions."
+            : "Configuration request failed. Check canonical Applications links, tenant definitions and permissions.",
       );
     }
-    let result: unknown;
+    let result;
     try {
       result = await response.json();
     } catch {
       throw Error("Invalid configuration response.");
     }
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-    return result as Record<string, any>;
+    return result;
   }
   async function perform(action: () => Promise<void>) {
     const owner = controller.current;
@@ -206,29 +205,52 @@ export function RuntimeConfigurationPanel({
   }
   async function load() {
     await perform(async () => {
-      const raw = await request("");
+      const raw = await request("local/runtime-configuration");
       const next = parseConfiguration(
         raw.configuration,
         connection.environment,
+        true,
       );
+      const available =
+        raw.availableApplications === undefined
+          ? next.applications
+          : parseConfiguration(
+              {
+                kind: "runtime-configuration",
+                schemaVersion: 1,
+                id: connection.environment,
+                applications: raw.availableApplications,
+                tenants: [],
+              },
+              connection.environment,
+              true,
+            ).applications;
       if (!Number.isSafeInteger(raw.revision) || raw.revision < 0)
         throw Error("Invalid configuration revision.");
       if (controller.current?.signal.aborted) return;
       setConfiguration(next);
+      setAvailableApplications(available);
+      setSelectedApps(Object.keys(next.applications));
       setRevision(raw.revision);
       setPublished(
         typeof raw.publicationId === "string" && raw.publicationId.length > 0,
       );
+      setSelectedTenant("");
       setConflict(false);
-      setSelected("");
       credentials.current = {};
       generations.current = {};
       mark(false);
-      setNotice("");
+      setCatalogError(
+        raw.availableApplications === undefined
+          ? "Showing current references. Reload after the API update to select other catalog applications."
+          : "",
+      );
     });
   }
+
   useEffect(() => {
-    controller.current = new AbortController();
+    const c = new AbortController();
+    controller.current = c;
     void load();
     const clear = () => {
       credentials.current = {};
@@ -236,7 +258,7 @@ export function RuntimeConfigurationPanel({
     };
     window.addEventListener("pagehide", clear);
     return () => {
-      controller.current?.abort();
+      c.abort();
       clear();
       dirtyCallback.current?.(false);
       window.removeEventListener("pagehide", clear);
@@ -252,15 +274,45 @@ export function RuntimeConfigurationPanel({
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
-  const tenant = configuration?.tenants.find((t) => t.tenant === selected);
+  const names = { ...availableApplications, ...configuration?.applications };
+  const tenant = configuration?.tenants.find(
+    (t) => t.tenant === selectedTenant,
+  );
+  function referenceDraft() {
+    if (!configuration) throw Error("Load configuration first.");
+    return configurationReferences({
+      ...configuration,
+      applications: Object.fromEntries(
+        selectedApps.map((slug) => [slug, names[slug]]),
+      ),
+    });
+  }
+  function selectApp(slug: string, included: boolean) {
+    setSelectedApps(
+      included
+        ? [...selectedApps, slug]
+        : selectedApps.filter((s) => s !== slug),
+    );
+    if (!included && configuration)
+      setConfiguration({
+        ...configuration,
+        tenants: configuration.tenants.map((t) => ({
+          ...t,
+          applications: t.applications.filter((a) => a !== slug),
+        })),
+      });
+    mark(true);
+  }
   function changeTenant(next: TenantSelection) {
-    if (configuration)
-      edit({
+    if (configuration) {
+      setConfiguration({
         ...configuration,
         tenants: configuration.tenants.map((t) =>
           t.tenant === next.tenant ? next : t,
         ),
       });
+      mark(true);
+    }
   }
   return (
     <div className="applications-layout">
@@ -278,9 +330,9 @@ export function RuntimeConfigurationPanel({
         <div>
           <h2>Runtime configuration</h2>
           <p>
-            ID: <strong>{connection.environment}</strong>. Save publishes
-            metadata and startup manifests. Grants and live activation are
-            managed separately.
+            ID: <strong>{connection.environment}</strong>. Combine existing
+            applications and tenants. Bindings are inherited; configuration Save
+            never changes their definitions or grants access.
           </p>
         </div>
         <button
@@ -301,33 +353,40 @@ export function RuntimeConfigurationPanel({
       {configuration && (
         <fieldset disabled={busy} className="runtime-configuration-editor">
           <section className="panel">
-            <h2>Applications and shared bindings</h2>
-            {Object.entries(configuration.applications).map(([slug, a]) => (
-              <details key={slug}>
-                <summary>{a.displayName}</summary>
+            <h2>Applications</h2>
+            <p>Inherited from Applications</p>
+            <p>
+              Manage names, resource links, versions and ENV mappings in the
+              Applications section. Runtime configuration selects existing
+              application IDs only.
+            </p>
+            {catalogError && <p role="status">{catalogError}</p>}
+            {Object.entries(names).map(([slug, a]) => (
+              <div key={slug}>
+                <label>
+                  <input
+                    type="checkbox"
+                    aria-label={"Include " + a.displayName}
+                    checked={selectedApps.includes(slug)}
+                    onChange={(e) => selectApp(slug, e.target.checked)}
+                  />
+                  {a.displayName}
+                </label>
                 <p>
                   <code>{slug}</code> · {a.description}
                 </p>
-                <SecretBindings
-                  secrets={a.secrets}
-                  onChange={(secrets) =>
-                    edit({
-                      ...configuration,
-                      applications: {
-                        ...configuration.applications,
-                        [slug]: { ...a, secrets },
-                      },
-                    })
-                  }
-                />
-              </details>
+                {selectedApps.includes(slug) && (
+                  <InheritedBindings secrets={a.secrets} />
+                )}
+              </div>
             ))}
           </section>
           <section className="panel">
             <h2>Tenants</h2>
             <p>
-              Load an existing tenant with its existing grant. Assignment does
-              not grant runtime access or provision an organization.
+              Select an existing tenant and its consuming applications.
+              Canonical tenant definitions own the inherited secrets and key
+              histories.
             </p>
             <form
               onSubmit={(e) => {
@@ -341,45 +400,46 @@ export function RuntimeConfigurationPanel({
                 }
                 void perform(async () => {
                   const raw = await request(
-                    "/tenants/" + encodeURIComponent(name),
+                    "local/runtime-configuration/tenants/" +
+                      encodeURIComponent(name),
                     "GET",
                     undefined,
                     name,
                     token,
                   );
-                  const loaded = parseTenant({
-                    tenant: raw.tenant,
-                    applications: [],
-                    secrets: raw.secrets,
-                    keySets: raw.keySets,
-                  });
+                  const loaded = parseTenant(
+                    {
+                      tenant: raw.tenant,
+                      applications: [],
+                      secrets: raw.secrets,
+                      keySets: raw.keySets,
+                    },
+                    true,
+                  );
                   if (
                     loaded.tenant !== name ||
                     !Number.isSafeInteger(raw.generation) ||
                     raw.generation < 0
                   )
-                    throw Error("Invalid tenant template.");
+                    throw Error("Invalid tenant canonical preview.");
                   if (controller.current?.signal.aborted) return;
                   credentials.current[name] = token;
                   generations.current[name] = raw.generation;
                   const existing = configuration.tenants.find(
                     (t) => t.tenant === name,
                   );
-                  if (!existing)
-                    edit({
-                      ...configuration,
-                      tenants: [...configuration.tenants, loaded],
-                    });
-                  else if (!existing.secrets.length && !existing.keySets.length)
-                    edit({
-                      ...configuration,
-                      tenants: configuration.tenants.map((t) =>
-                        t.tenant === name
-                          ? { ...loaded, applications: existing.applications }
-                          : t,
-                      ),
-                    });
-                  setSelected(name);
+                  setConfiguration({
+                    ...configuration,
+                    tenants: existing
+                      ? configuration.tenants.map((t) =>
+                          t.tenant === name
+                            ? { ...loaded, applications: existing.applications }
+                            : t,
+                        )
+                      : [...configuration.tenants, loaded],
+                  });
+                  if (!existing) mark(true);
+                  setSelectedTenant(name);
                 });
               }}
             >
@@ -400,7 +460,7 @@ export function RuntimeConfigurationPanel({
                   spellCheck={false}
                 />
               </label>
-              <button disabled={busy} className="secondary-button">
+              <button className="secondary-button" disabled={busy}>
                 Load tenant
               </button>
             </form>
@@ -408,9 +468,8 @@ export function RuntimeConfigurationPanel({
               <thead>
                 <tr>
                   <th>Tenant</th>
-                  <th>Consumers</th>
-                  <th>Bindings</th>
-                  <th>Key roles</th>
+                  <th>Assigned applications</th>
+                  <th>Inherited bindings</th>
                 </tr>
               </thead>
               <tbody>
@@ -419,33 +478,18 @@ export function RuntimeConfigurationPanel({
                     <td>
                       <button
                         className="secondary-button"
-                        onClick={() => setSelected(t.tenant)}
+                        onClick={() => setSelectedTenant(t.tenant)}
                       >
                         {t.tenant}
                       </button>
                     </td>
                     <td>
                       {t.applications
-                        .map(
-                          (a) =>
-                            configuration.applications[a]?.displayName ?? a,
-                        )
+                        .map((a) => names[a]?.displayName ?? a)
                         .join(", ") || "Unassigned"}
                     </td>
                     <td>
                       {t.secrets.length} secrets, {t.keySets.length} key sets
-                    </td>
-                    <td>
-                      {t.keySets.length &&
-                      t.keySets.every(
-                        (k) =>
-                          k.mappings &&
-                          k.wrappingVersions.some(
-                            (w) => w.keyVersion === k.currentWrappingVersion,
-                          ),
-                      )
-                        ? "Complete roles; save validates resources"
-                        : "Incomplete / no key set"}
                     </td>
                   </tr>
                 ))}
@@ -453,12 +497,57 @@ export function RuntimeConfigurationPanel({
             </table>
             {tenant && (
               <>
-                <TenantBindings
-                  key={tenant.tenant}
-                  tenant={tenant}
-                  configuration={configuration}
-                  onChange={changeTenant}
-                />
+                <section aria-label={"Bindings for " + tenant.tenant}>
+                  <h3>{tenant.tenant} assignments</h3>
+                  <fieldset>
+                    <legend>Assigned consumers</legend>
+                    {selectedApps.map((slug) => (
+                      <label key={slug}>
+                        <input
+                          type="checkbox"
+                          aria-label={`${names[slug]?.displayName ?? slug} consumes ${tenant.tenant}`}
+                          checked={tenant.applications.includes(slug)}
+                          onChange={(e) =>
+                            changeTenant({
+                              ...tenant,
+                              applications: e.target.checked
+                                ? [...tenant.applications, slug]
+                                : tenant.applications.filter((s) => s !== slug),
+                            })
+                          }
+                        />
+                        {names[slug]?.displayName ?? slug}
+                      </label>
+                    ))}
+                  </fieldset>
+                  <p>Inherited from tenant canonical definitions</p>
+                  <p>
+                    Load this tenant with its existing grant to refresh the
+                    read-only preview. Missing material must be provisioned in
+                    the tenant namespace.
+                  </p>
+                  <InheritedBindings
+                    secrets={tenant.secrets}
+                    keySets={tenant.keySets}
+                  />
+                  <button
+                    className="secondary-button"
+                    onClick={() => {
+                      setConfiguration({
+                        ...configuration,
+                        tenants: configuration.tenants.filter(
+                          (t) => t.tenant !== tenant.tenant,
+                        ),
+                      });
+                      setSelectedTenant("");
+                      delete credentials.current[tenant.tenant];
+                      delete generations.current[tenant.tenant];
+                      mark(true);
+                    }}
+                  >
+                    Remove tenant assignment
+                  </button>
+                </section>
                 <RuntimeAccessPanel
                   connection={connection}
                   tenant={tenant.tenant}
@@ -466,7 +555,7 @@ export function RuntimeConfigurationPanel({
                     credentials.current[tenant.tenant] ?? connection.token
                   }
                   applications={tenant.applications}
-                  names={configuration.applications}
+                  names={names}
                 />
                 <TenantRuntimeReports
                   connection={{
@@ -476,7 +565,7 @@ export function RuntimeConfigurationPanel({
                       credentials.current[tenant.tenant] ?? connection.token,
                   }}
                   applications={tenant.applications}
-                  names={configuration.applications}
+                  names={names}
                   revision={revision}
                   published={published && !dirty}
                 />
@@ -488,51 +577,52 @@ export function RuntimeConfigurationPanel({
             <p role="status">
               {published
                 ? "Published metadata — binding adoption is confirmed only by fresh reports."
-                : "Not published — review this metadata draft and Save to publish startup manifests."}
+                : "Not published — review these assignments and Save to publish inherited startup manifests."}
             </p>
             <p>
               {dirty
-                ? "Unsaved metadata changes."
-                : "No unsaved metadata changes."}{" "}
-              Affected consumers:{" "}
-              {Object.values(configuration.applications)
-                .map((a) => a.displayName)
+                ? "Unsaved assignment changes."
+                : "No unsaved assignment changes."}{" "}
+              Applications:{" "}
+              {selectedApps
+                .map((slug) => names[slug]?.displayName ?? slug)
                 .join(", ")}
               .
             </p>
             <p>
-              Binding adoption is pending until authenticated consumer reports
-              confirm it. Check application reports below. Business tenant
-              provisioning and separately authorized runtime identities are
-              required.
+              Save resolves current canonical definitions, even when assignments
+              are unchanged. Missing resources, mapping conflicts and unsafe key
+              changes are rejected. Provider connections and business routes may
+              still be pending.
             </p>
             <button
               className="primary-button"
-              disabled={busy || conflict || !dirty}
+              disabled={busy || conflict}
               onClick={() =>
                 void perform(async () => {
-                  const clean = parseConfiguration(
-                    configuration,
-                    connection.environment,
-                    true,
-                  );
-                  const raw = await request("", "PUT", {
-                    expectedRevision: revision,
-                    configuration: clean,
-                    expectedGenerations: Object.fromEntries(
-                      Object.entries(generations.current).filter(([tenant]) =>
-                        clean.tenants.some((t) => t.tenant === tenant),
+                  const refs = referenceDraft();
+                  const raw = await request(
+                    "local/runtime-configuration",
+                    "PUT",
+                    {
+                      expectedRevision: revision,
+                      configuration: refs,
+                      expectedGenerations: Object.fromEntries(
+                        Object.entries(generations.current).filter(([tenant]) =>
+                          refs.tenants.some((t) => t.tenant === tenant),
+                        ),
                       ),
-                    ),
-                  });
+                    },
+                  );
                   const next = parseConfiguration(
                     raw.configuration,
                     connection.environment,
+                    true,
                   );
                   if (!Number.isSafeInteger(raw.revision) || raw.revision < 0)
                     throw Error("Invalid saved revision.");
-                  if (controller.current?.signal.aborted) return;
                   setConfiguration(next);
+                  setSelectedApps(Object.keys(next.applications));
                   setRevision(raw.revision);
                   setPublished(
                     typeof raw.publicationId === "string" &&
@@ -550,10 +640,9 @@ export function RuntimeConfigurationPanel({
             </button>
             <button
               className="secondary-button"
-              disabled={busy}
               onClick={() => {
                 try {
-                  setExportText(exportConfiguration(configuration));
+                  setExportText(exportConfiguration(referenceDraft()));
                 } catch (e) {
                   setError((e as Error).message);
                 }
@@ -564,13 +653,13 @@ export function RuntimeConfigurationPanel({
             {exportText && (
               <label>
                 Metadata-only export
-                <textarea readOnly rows={12} value={exportText} />
+                <textarea readOnly rows={10} value={exportText} />
               </label>
             )}
             <label>
               Import configuration JSON
               <textarea
-                rows={6}
+                rows={5}
                 value={importText}
                 onChange={(e) => setImportText(e.target.value)}
               />
@@ -588,15 +677,18 @@ export function RuntimeConfigurationPanel({
                       "Import must contain valid metadata-only JSON.",
                     );
                   }
-                  const raw = await request("/import", "POST", input);
-                  if (!controller.current?.signal.aborted)
-                    setPreview(
-                      parseConfiguration(
-                        raw.configuration,
-                        connection.environment,
-                        true,
-                      ),
-                    );
+                  const raw = await request(
+                    "local/runtime-configuration/import",
+                    "POST",
+                    input,
+                  );
+                  setPreview(
+                    parseConfiguration(
+                      raw.configuration,
+                      connection.environment,
+                      true,
+                    ),
+                  );
                 })
               }
             >
@@ -611,18 +703,20 @@ export function RuntimeConfigurationPanel({
               >
                 <h3>Review imported configuration</h3>
                 <p>
-                  This replaces the draft. Review all mappings, Latest policies,
-                  immutable pins and wrapping history before Save. No
-                  permissions change.
+                  Import uses assignments only. Names, secret versions, ENV
+                  mappings and key sets always come from canonical definitions;
+                  imported copies never overwrite them.
                 </p>
-                <pre>{JSON.stringify(preview, null, 2)}</pre>
+                <pre>{exportConfiguration(preview)}</pre>
                 <button
                   className="primary-button"
                   onClick={() => {
-                    edit(preview);
+                    setConfiguration(preview);
+                    setSelectedApps(Object.keys(preview.applications));
                     setPreview(undefined);
+                    setSelectedTenant("");
                     setImportText("");
-                    setSelected("");
+                    mark(true);
                   }}
                 >
                   Use imported draft
@@ -639,233 +733,9 @@ export function RuntimeConfigurationPanel({
           </section>
         </fieldset>
       )}
-      <details onToggle={(e) => setCatalogOpen(e.currentTarget.open)}>
-        <summary>Application catalog and runtime reports</summary>
-        {catalogOpen && (
-          <ApplicationsPanel
-            connection={connection}
-            onDirty={(value) => {
-              catalogDirty.current = value;
-              dirtyCallback.current?.(dirty || value);
-            }}
-            onUnauthorized={onUnauthorized}
-          />
-        )}
-      </details>
     </div>
   );
 }
-function TenantBindings({
-  tenant,
-  configuration,
-  onChange,
-}: {
-  tenant: TenantSelection;
-  configuration: RuntimeConfigurationDocument;
-  onChange: (t: TenantSelection) => void;
-}) {
-  function updateKey(index: number, next: KeyPlan) {
-    onChange({
-      ...tenant,
-      keySets: tenant.keySets.map((key, n) => (n === index ? next : key)),
-    });
-  }
-  return (
-    <section aria-label={"Bindings for " + tenant.tenant}>
-      <h3>{tenant.tenant} bindings</h3>
-      <fieldset>
-        <legend>Assigned consumers</legend>
-        {Object.entries(configuration.applications).map(([slug, a]) => (
-          <label key={slug}>
-            <input
-              type="checkbox"
-              aria-label={`${a.displayName} consumes ${tenant.tenant}`}
-              checked={tenant.applications.includes(slug)}
-              onChange={(e) =>
-                onChange({
-                  ...tenant,
-                  applications: e.target.checked
-                    ? [...tenant.applications, slug]
-                    : tenant.applications.filter((s) => s !== slug),
-                })
-              }
-            />
-            {a.displayName}
-          </label>
-        ))}
-      </fieldset>
-      <SecretBindings
-        secrets={tenant.secrets}
-        onChange={(secrets) => onChange({ ...tenant, secrets })}
-      />
-      <p>
-        Retain historical wrapping labels and versions. Changing key material
-        requires the existing encryption migration safeguards.
-      </p>
-      {tenant.keySets.map((key, index) => (
-        <fieldset key={index}>
-          <legend>Key set {index + 1}</legend>
-          <label>
-            Key set reference / profile
-            <input
-              value={key.reference}
-              onChange={(e) =>
-                updateKey(index, { ...key, reference: e.target.value })
-              }
-            />
-          </label>
-          <label>
-            Current wrapping label
-            <input
-              value={key.currentWrappingVersion}
-              onChange={(e) =>
-                updateKey(index, {
-                  ...key,
-                  currentWrappingVersion: e.target.value,
-                })
-              }
-            />
-          </label>
-          {(["wrapping", "index", "control"] as const).map((role) => (
-            <label key={role}>
-              {role} ENV mapping
-              <input
-                value={key.mappings?.[role] ?? ""}
-                onChange={(e) =>
-                  updateKey(index, {
-                    ...key,
-                    mappings: {
-                      wrapping: key.mappings?.wrapping ?? "",
-                      index: key.mappings?.index ?? "",
-                      control: key.mappings?.control ?? "",
-                      [role]: e.target.value,
-                    },
-                  })
-                }
-              />
-            </label>
-          ))}
-          <label>
-            Index Vault version
-            <input
-              value={key.indexVersion ?? ""}
-              placeholder="latest or immutable pin"
-              onChange={(e) =>
-                updateKey(index, { ...key, indexVersion: e.target.value })
-              }
-            />
-          </label>
-          <label>
-            Control Vault version
-            <input
-              value={key.controlVersion ?? ""}
-              placeholder="latest or immutable pin"
-              onChange={(e) =>
-                updateKey(index, { ...key, controlVersion: e.target.value })
-              }
-            />
-          </label>
-          {key.wrappingVersions.map((w, n) => (
-            <fieldset key={n}>
-              <legend>Retained wrapping version {n + 1}</legend>
-              <label>
-                Wrapping label
-                <input
-                  value={w.keyVersion}
-                  onChange={(e) =>
-                    updateKey(index, {
-                      ...key,
-                      wrappingVersions: key.wrappingVersions.map((v, i) =>
-                        i === n ? { ...v, keyVersion: e.target.value } : v,
-                      ),
-                    })
-                  }
-                />
-              </label>
-              <label>
-                Wrapping Vault version
-                <input
-                  value={w.vaultVersion ?? ""}
-                  placeholder="latest or immutable pin"
-                  onChange={(e) =>
-                    updateKey(index, {
-                      ...key,
-                      wrappingVersions: key.wrappingVersions.map((v, i) =>
-                        i === n ? { ...v, vaultVersion: e.target.value } : v,
-                      ),
-                    })
-                  }
-                />
-              </label>
-              <button
-                className="secondary-button"
-                onClick={() =>
-                  updateKey(index, {
-                    ...key,
-                    wrappingVersions: key.wrappingVersions.filter(
-                      (_, i) => i !== n,
-                    ),
-                  })
-                }
-              >
-                Remove retained version {n + 1}
-              </button>
-            </fieldset>
-          ))}
-          <button
-            className="secondary-button"
-            onClick={() =>
-              updateKey(index, {
-                ...key,
-                wrappingVersions: [
-                  ...key.wrappingVersions,
-                  { keyVersion: "", vaultVersion: "latest" },
-                ],
-              })
-            }
-          >
-            Retain another wrapping version
-          </button>
-          <button
-            className="secondary-button"
-            onClick={() =>
-              onChange({
-                ...tenant,
-                keySets: tenant.keySets.filter((_, n) => n !== index),
-              })
-            }
-          >
-            Remove key set {index + 1}
-          </button>
-        </fieldset>
-      ))}
-      <button
-        className="secondary-button"
-        onClick={() =>
-          onChange({
-            ...tenant,
-            keySets: [
-              ...tenant.keySets,
-              {
-                reference: "",
-                currentWrappingVersion: "v1",
-                wrappingVersions: [
-                  { keyVersion: "v1", vaultVersion: "latest" },
-                ],
-                mappings: { wrapping: "", index: "", control: "" },
-                indexVersion: "latest",
-                controlVersion: "latest",
-              },
-            ],
-          })
-        }
-      >
-        Add existing key set
-      </button>
-    </section>
-  );
-}
-
 function TenantRuntimeReports({
   connection,
   applications,

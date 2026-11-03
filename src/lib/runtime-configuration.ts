@@ -190,22 +190,87 @@ export function parseConfiguration(
     tenants,
   };
 }
-export function exportConfiguration(
-  configuration: RuntimeConfigurationDocument,
-) {
+export interface RuntimeConfigurationReferences {
+  kind: "runtime-configuration";
+  schemaVersion: 2;
+  id: string;
+  applications: string[];
+  tenants: { tenant: string; applications: string[] }[];
+}
+export function parseReferenceConfiguration(
+  input: unknown,
+  environment: string,
+): RuntimeConfigurationReferences {
+  const c = object(input, [
+    "kind",
+    "schemaVersion",
+    "id",
+    "applications",
+    "tenants",
+  ]);
   if (
-    configuration.tenants.some((t) =>
-      t.keySets.some(
-        (k) =>
-          k.indexVersion === undefined ||
-          k.controlVersion === undefined ||
-          k.wrappingVersions.some((w) => w.vaultVersion === undefined),
-      ),
-    )
+    c.kind !== "runtime-configuration" ||
+    c.schemaVersion !== 2 ||
+    c.id !== environment
   )
-    throw Error("Resolve key-role versions with Save before exporting.");
+    throw Error("Configuration must match the connected environment.");
+  const slug = (v: unknown) => {
+    const value = string(v, 64);
+    if (!/^[a-z][a-z0-9-]{0,63}$/.test(value))
+      throw Error("Invalid application reference.");
+    return value;
+  };
+  const applications = list(c.applications).map(slug);
+  const tenants = list(c.tenants).map((raw) => {
+    const t = object(raw, ["tenant", "applications"]);
+    const tenant = string(t.tenant, 64);
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(tenant) || tenant === "_shared")
+      throw Error("Invalid tenant reference.");
+    const names = list(t.applications).map(slug);
+    if (
+      new Set(names).size !== names.length ||
+      names.some((name) => !applications.includes(name))
+    )
+      throw Error("Invalid tenant assignments.");
+    return { tenant, applications: names };
+  });
+  if (
+    new Set(applications).size !== applications.length ||
+    new Set(tenants.map((t) => t.tenant)).size !== tenants.length
+  )
+    throw Error("Duplicate configuration references.");
+  return {
+    kind: "runtime-configuration",
+    schemaVersion: 2,
+    id: environment,
+    applications,
+    tenants,
+  };
+}
+export function configurationReferences(
+  configuration: RuntimeConfigurationDocument,
+): RuntimeConfigurationReferences {
+  return parseReferenceConfiguration(
+    {
+      kind: "runtime-configuration",
+      schemaVersion: 2,
+      id: configuration.id,
+      applications: Object.keys(configuration.applications),
+      tenants: configuration.tenants.map((t) => ({
+        tenant: t.tenant,
+        applications: t.applications,
+      })),
+    },
+    configuration.id,
+  );
+}
+export function exportConfiguration(
+  configuration: RuntimeConfigurationDocument | RuntimeConfigurationReferences,
+) {
   return JSON.stringify(
-    parseConfiguration(configuration, configuration.id),
+    configuration.schemaVersion === 2
+      ? parseReferenceConfiguration(configuration, configuration.id)
+      : configurationReferences(configuration),
     null,
     2,
   );

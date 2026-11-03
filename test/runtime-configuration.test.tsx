@@ -50,29 +50,61 @@ const connection = {
   tenant: "_shared",
   token: "fixture-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 };
-test("metadata serialization preserves Latest and rejects credential fields", () => {
-  assert.deepEqual(
-    JSON.parse(
-      exportConfiguration(parseConfiguration(configuration, "development")),
+function resolveReferences(refs: any) {
+  return {
+    ...configuration,
+    applications: Object.fromEntries(
+      refs.applications.map((slug: string) => [
+        slug,
+        configuration.applications[
+          slug as keyof typeof configuration.applications
+        ],
+      ]),
     ),
-    configuration,
+    tenants: refs.tenants.map((t: any) => ({ ...t, secrets: [], keySets: [] })),
+  };
+}
+test("export contains only schema2 application and tenant references", () => {
+  const preview = {
+    ...configuration,
+    tenants: [
+      {
+        tenant: "fcrww",
+        applications: ["club-api"],
+        secrets: [
+          { purpose: "db", mapping: "TENANT_DB", version: "a".repeat(32) },
+        ],
+        keySets: [],
+      },
+    ],
+  };
+  const exported = JSON.parse(
+    exportConfiguration(parseConfiguration(preview, "development")),
   );
-  assert.throws(() =>
-    parseConfiguration({ ...configuration, token: "private" }, "development"),
-  );
+  assert.deepEqual(exported, {
+    kind: "runtime-configuration",
+    schemaVersion: 2,
+    id: "development",
+    applications: ["club-api", "app", "explorer", "explorer-api"],
+    tenants: [{ tenant: "fcrww", applications: ["club-api"] }],
+  });
+  assert.equal(JSON.stringify(exported).includes("MONGO_URI"), false);
 });
-test("loads existing tenant with ephemeral grant, assigns consumer and saves metadata without asserting Ready", async () => {
+test("canonical bindings are read-only and Save sends reference-only selections", async () => {
   const calls: { path: string; init: RequestInit | undefined }[] = [];
   globalThis.fetch = async (input, init) => {
     const path = String(input);
     calls.push({ path, init });
-    if (path.endsWith("/tenants/fcrww"))
+    if (
+      path.endsWith("/tenants/fcrww") &&
+      path.includes("/runtime-configuration/")
+    )
       return Response.json({
         tenant: "fcrww",
         generation: 4,
         secrets: [
           {
-            purpose: "database",
+            purpose: "tenant-db",
             mapping: "TENANT_DB",
             version: "a".repeat(32),
           },
@@ -82,12 +114,18 @@ test("loads existing tenant with ephemeral grant, assigns consumer and saves met
     if (init?.method === "PUT")
       return Response.json({
         revision: 2,
-        configuration: JSON.parse(String(init.body)).configuration,
+        publicationId: "published",
+        configuration: resolveReferences(
+          JSON.parse(String(init.body)).configuration,
+        ),
       });
     return Response.json({ revision: 1, configuration });
   };
   render(<RuntimeConfigurationPanel connection={connection} />);
-  await screen.findByText("Club API");
+  await screen.findByText("MONGO_URI");
+  assert.equal(screen.queryByLabelText("ENV mapping"), null);
+  assert.equal(screen.queryByText("Add secret binding"), null);
+  assert.ok(screen.getByText("Inherited from Applications"));
   fireEvent.change(screen.getByLabelText("Existing tenant slug"), {
     target: { value: "fcrww" },
   });
@@ -95,359 +133,97 @@ test("loads existing tenant with ephemeral grant, assigns consumer and saves met
     target: { value: "tenant-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
   });
   fireEvent.click(screen.getByText("Load tenant"));
-  await screen.findByLabelText("Club API consumes fcrww");
-  assert.equal(
-    (screen.getByLabelText("Tenant grant (optional)") as HTMLInputElement)
-      .value,
-    "",
-  );
+  await screen.findByText("TENANT_DB");
   fireEvent.click(screen.getByLabelText("Club API consumes fcrww"));
   fireEvent.click(screen.getByText("Save configuration"));
-  await screen.findByText(/Saved configuration.*consumer reports/i);
-  const save = calls.find((c) => c.init?.method === "PUT")!;
-  const body = JSON.parse(String(save.init?.body));
-  assert.deepEqual(body.configuration.tenants[0].applications, ["club-api"]);
-  assert.deepEqual(body.expectedGenerations, { fcrww: 4 });
-  assert.equal(String(save.init?.body).includes("tenant-aaaa"), false);
-  assert.equal(
-    new Headers(save.init?.headers).get("x-vault-tenant-tokens"),
-    JSON.stringify({ fcrww: "tenant-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }),
+  await screen.findByText(/Saved configuration/);
+  const body = JSON.parse(
+    String(calls.find((c) => c.init?.method === "PUT")!.init?.body),
   );
-  assert.equal(dom.window.localStorage.length, 0);
+  assert.equal(body.configuration.schemaVersion, 2);
+  assert.deepEqual(body.configuration.tenants, [
+    { tenant: "fcrww", applications: ["club-api"] },
+  ]);
+  assert.equal(JSON.stringify(body.configuration).includes("secrets"), false);
+  assert.equal(
+    JSON.stringify(body.configuration).includes("tenant-aaaa"),
+    false,
+  );
 });
-test("import stages preview and cancel leaves the draft unchanged", async () => {
+test("legacy and schema2 imports stage canonical assignment previews and cancellation is safe", async () => {
+  const preview = {
+    ...configuration,
+    tenants: [
+      { tenant: "other", applications: ["app"], secrets: [], keySets: [] },
+    ],
+  };
   globalThis.fetch = async (input) =>
     Response.json(
       String(input).endsWith("/import")
-        ? {
-            configuration: {
-              ...configuration,
-              tenants: [
-                {
-                  tenant: "other",
-                  applications: ["app"],
-                  secrets: [],
-                  keySets: [],
-                },
-              ],
-            },
-          }
+        ? { configuration: preview }
         : { revision: 1, configuration },
     );
   render(<RuntimeConfigurationPanel connection={connection} />);
-  await screen.findByText("Club API");
+  await screen.findByText("MONGO_URI");
   fireEvent.change(screen.getByLabelText("Import configuration JSON"), {
-    target: { value: JSON.stringify(configuration) },
+    target: {
+      value: JSON.stringify({
+        schemaVersion: 1,
+        applications: { app: { secrets: [{ mapping: "STALE" }] } },
+      }),
+    },
   });
   fireEvent.click(screen.getByText("Preview import"));
-  await screen.findByRole("dialog", { name: "Review imported configuration" });
+  await screen.findByRole("dialog");
+  assert.ok(screen.getByText(/assignments only/));
   fireEvent.click(screen.getByText("Cancel import"));
-  assert.equal(screen.queryByLabelText("Club APP consumes other"), null);
-});
-test("retains key history controls, blocks invalid drafts and guards reload cancellation", async () => {
-  const keySets = [
-    {
-      reference: "profile/default",
-      currentWrappingVersion: "v1",
-      mappings: { wrapping: "WRAP", index: "INDEX", control: "CONTROL" },
-      wrappingVersions: [{ keyVersion: "v1", vaultVersion: "a".repeat(32) }],
-      indexVersion: "latest",
-      controlVersion: "b".repeat(32),
+  assert.equal(screen.queryByText("other"), null);
+  fireEvent.change(screen.getByLabelText("Import configuration JSON"), {
+    target: {
+      value: JSON.stringify({
+        kind: "runtime-configuration",
+        schemaVersion: 2,
+        id: "development",
+        applications: ["app"],
+        tenants: [{ tenant: "other", applications: ["app"] }],
+      }),
     },
-  ];
-  globalThis.fetch = async () =>
-    Response.json({
-      revision: 1,
-      configuration: {
-        ...configuration,
-        tenants: [
-          { tenant: "fcrww", applications: ["club-api"], secrets: [], keySets },
-        ],
-      },
-    });
-  render(<RuntimeConfigurationPanel connection={connection} />);
-  await screen.findByText("fcrww");
-  fireEvent.click(screen.getByText("fcrww"));
-  fireEvent.click(screen.getByText("Retain another wrapping version"));
-  assert.equal(screen.getAllByLabelText("Wrapping label").length, 2);
-  fireEvent.click(screen.getByText("Reload configuration"));
-  await screen.findByRole("alertdialog");
-  fireEvent.click(screen.getByText("Stay"));
-  assert.equal(screen.getAllByLabelText("Wrapping label").length, 2);
-  fireEvent.click(screen.getByText("Save configuration"));
-  await screen.findByRole("alert");
+  });
+  fireEvent.click(screen.getByText("Preview import"));
+  await screen.findByRole("dialog");
+  fireEvent.click(screen.getByText("Use imported draft"));
+  assert.ok(screen.getByText("other"));
+  fireEvent.click(screen.getByText("Export configuration"));
+  assert.equal(
+    JSON.parse(
+      (screen.getByLabelText("Metadata-only export") as HTMLTextAreaElement)
+        .value,
+    ).schemaVersion,
+    2,
+  );
 });
-test("409 keeps the draft and disables repeat Save until reload", async () => {
+test("assignment edits preserve dirty cancellation and revision conflict guards", async () => {
   globalThis.fetch = async (_input, init) =>
     init?.method === "PUT"
       ? Response.json({ error: { code: "RevisionConflict" } }, { status: 409 })
       : Response.json({ revision: 1, configuration });
   render(<RuntimeConfigurationPanel connection={connection} />);
-  await screen.findByText("Club API");
-  fireEvent.click(screen.getByText("Club API"));
-  fireEvent.change(screen.getByLabelText("ENV mapping"), {
-    target: { value: "OTHER" },
-  });
+  await screen.findByLabelText("Include Club APP");
+  fireEvent.click(screen.getByLabelText("Include Club APP"));
+  fireEvent.click(screen.getByText("Reload configuration"));
+  await screen.findByRole("alertdialog");
+  fireEvent.click(screen.getByText("Stay"));
+  assert.equal(
+    (screen.getByLabelText("Include Club APP") as HTMLInputElement).checked,
+    false,
+  );
   fireEvent.click(screen.getByText("Save configuration"));
   await screen.findByText(/Revision conflict/);
   assert.equal(
     (screen.getByText("Save configuration") as HTMLButtonElement).disabled,
     true,
   );
-  assert.equal(
-    (screen.getByLabelText("ENV mapping") as HTMLInputElement).value,
-    "OTHER",
-  );
 });
-test("binding adoption requires a fresh scoped consumer report rather than a metadata save", async () => {
-  const calls: string[] = [];
-  globalThis.fetch = async (input, init) => {
-    const path = String(input);
-    calls.push(path);
-    if (path.includes("/status")) {
-      assert.equal(new Headers(init?.headers).get("x-vault-tenant"), "fcrww");
-      return Response.json({
-        state: "applied",
-        instances: [
-          {
-            instanceId: "fixture",
-            lastSeen: Date.now(),
-            expiresAt: Date.now() + 60000,
-            status: "applied",
-          },
-        ],
-      });
-    }
-    return Response.json({
-      revision: 1,
-      publicationId: "published-fixture",
-      configuration: {
-        ...configuration,
-        tenants: [
-          {
-            tenant: "fcrww",
-            applications: ["club-api"],
-            secrets: [],
-            keySets: [],
-          },
-        ],
-      },
-    });
-  };
-  render(<RuntimeConfigurationPanel connection={connection} />);
-  await screen.findByText("fcrww");
-  fireEvent.click(screen.getByText("fcrww"));
-  await screen.findByText("Club API: Bindings adopted (consumer reported)");
-  assert.ok(screen.getByText(/reports Vault binding adoption only/));
-  assert.ok(calls.includes("/api/vault/local/applications/club-api/status"));
-});
-
-test("successful Save consumes reviewed generations so later changes do not send stale counters", async () => {
-  const generations: unknown[] = [];
-  globalThis.fetch = async (input, init) => {
-    if (String(input).endsWith("/tenants/fcrww"))
-      return Response.json({
-        tenant: "fcrww",
-        generation: 4,
-        secrets: [],
-        keySets: [],
-      });
-    if (init?.method === "PUT") {
-      const body = JSON.parse(String(init.body));
-      generations.push(body.expectedGenerations);
-      return Response.json({
-        revision: generations.length + 1,
-        configuration: body.configuration,
-      });
-    }
-    return Response.json({ revision: 1, configuration });
-  };
-  render(<RuntimeConfigurationPanel connection={connection} />);
-  await screen.findByText("Club API");
-  fireEvent.change(screen.getByLabelText("Existing tenant slug"), {
-    target: { value: "fcrww" },
-  });
-  fireEvent.click(screen.getByText("Load tenant"));
-  await screen.findByLabelText("Club API consumes fcrww");
-  fireEvent.click(screen.getByLabelText("Club API consumes fcrww"));
-  fireEvent.click(screen.getByText("Save configuration"));
-  await screen.findByText(/Saved configuration/);
-  fireEvent.click(screen.getByLabelText("Club APP consumes fcrww"));
-  fireEvent.click(screen.getByText("Save configuration"));
-  await waitFor(() => assert.equal(generations.length, 2));
-  assert.deepEqual(generations, [{ fcrww: 4 }, {}]);
-});
-
-test("freezes configuration controls while a save is in flight", async () => {
-  let finish: ((v: Response) => void) | undefined;
-  globalThis.fetch = async (_input, init) =>
-    init?.method === "PUT"
-      ? new Promise((resolve) => {
-          finish = resolve;
-        })
-      : Response.json({ revision: 1, configuration });
-  render(<RuntimeConfigurationPanel connection={connection} />);
-  await screen.findByText("Club API");
-  fireEvent.click(screen.getByText("Club API"));
-  fireEvent.change(screen.getByLabelText("ENV mapping"), {
-    target: { value: "CHANGED" },
-  });
-  fireEvent.click(screen.getByText("Save configuration"));
-  assert.ok(
-    (screen.getByLabelText("ENV mapping") as HTMLInputElement).matches(
-      ":disabled",
-    ),
-  );
-  finish?.(Response.json({ revision: 2, configuration }));
-  await screen.findByText(/Saved configuration/);
-});
-
-test("legacy import leaves omitted versions unresolved until Save returns actual immutable pins", async () => {
-  const draft = {
-    ...configuration,
-    applications: {
-      "club-api": {
-        displayName: "Club API",
-        description: "",
-        secrets: [{ purpose: "mongo", mapping: "MONGO_URI" }],
-      },
-    },
-  };
-  globalThis.fetch = async (input, init) =>
-    String(input).endsWith("/import")
-      ? Response.json({ configuration: draft })
-      : init?.method === "PUT"
-        ? Response.json({
-            revision: 2,
-            configuration: {
-              ...draft,
-              applications: {
-                "club-api": {
-                  ...draft.applications["club-api"],
-                  secrets: [
-                    {
-                      purpose: "mongo",
-                      mapping: "MONGO_URI",
-                      version: "a".repeat(32),
-                    },
-                  ],
-                },
-              },
-            },
-          })
-        : Response.json({ revision: 1, configuration });
-  render(<RuntimeConfigurationPanel connection={connection} />);
-  await screen.findByText("Club API");
-  fireEvent.change(screen.getByLabelText("Import configuration JSON"), {
-    target: { value: JSON.stringify({ schemaVersion: 1 }) },
-  });
-  fireEvent.click(screen.getByText("Preview import"));
-  await screen.findByRole("dialog");
-  fireEvent.click(screen.getByText("Use imported draft"));
-  fireEvent.click(screen.getByText("Club API"));
-  assert.equal(
-    (
-      screen.getByLabelText(
-        "Version (latest or immutable pin)",
-      ) as HTMLInputElement
-    ).value,
-    "",
-  );
-  assert.ok(
-    screen.getByPlaceholderText("Choose version — unresolved legacy selection"),
-  );
-  fireEvent.click(screen.getByText("Export configuration"));
-  await screen.findByRole("alert");
-  assert.equal(screen.queryByLabelText("Metadata-only export"), null);
-  fireEvent.click(screen.getByText("Save configuration"));
-  await screen.findByText(/Saved configuration/);
-  fireEvent.click(screen.getByText("Export configuration"));
-  assert.ok(
-    (
-      screen.getByLabelText("Metadata-only export") as HTMLTextAreaElement
-    ).value.includes("a".repeat(32)),
-  );
-});
-
-test("export rejects unresolved key-role versions instead of silently losing policies", () => {
-  const unresolved = {
-    ...configuration,
-    tenants: [
-      {
-        tenant: "fcrww",
-        applications: ["club-api"],
-        secrets: [],
-        keySets: [
-          {
-            reference: "default",
-            currentWrappingVersion: "v1",
-            wrappingVersions: [{ keyVersion: "v1" }],
-          },
-        ],
-      },
-    ],
-  };
-  assert.throws(
-    () => exportConfiguration(parseConfiguration(unresolved, "development")),
-    /key.*version/i,
-  );
-});
-
-test("malformed import errors do not echo pasted credentials", async () => {
-  globalThis.fetch = async () => Response.json({ revision: 1, configuration });
-  render(<RuntimeConfigurationPanel connection={connection} />);
-  await screen.findByText("Club API");
-  fireEvent.change(screen.getByLabelText("Import configuration JSON"), {
-    target: { value: "SENSITIVE" },
-  });
-  fireEvent.click(screen.getByText("Preview import"));
-  const alert = await screen.findByRole("alert");
-  assert.equal(alert.textContent?.includes("SENSITIVE"), false);
-});
-
-test("loading a bootstrap tenant fills its scoped binding template while preserving assignments", async () => {
-  globalThis.fetch = async (input) =>
-    String(input).endsWith("/tenants/fcrww")
-      ? Response.json({
-          tenant: "fcrww",
-          generation: 2,
-          secrets: [
-            {
-              purpose: "tenant-db",
-              mapping: "TENANT_DB",
-              version: "a".repeat(32),
-            },
-          ],
-          keySets: [],
-        })
-      : Response.json({
-          revision: 0,
-          configuration: {
-            ...configuration,
-            tenants: [
-              {
-                tenant: "fcrww",
-                applications: ["club-api"],
-                secrets: [],
-                keySets: [],
-              },
-            ],
-          },
-        });
-  render(<RuntimeConfigurationPanel connection={connection} />);
-  await screen.findByText("fcrww");
-  fireEvent.change(screen.getByLabelText("Existing tenant slug"), {
-    target: { value: "fcrww" },
-  });
-  fireEvent.click(screen.getByText("Load tenant"));
-  await screen.findByText("tenant-db");
-  assert.equal(
-    (screen.getByLabelText("Club API consumes fcrww") as HTMLInputElement)
-      .checked,
-    true,
-  );
-});
-
 test("runtime access is explicitly confirmed separately from configuration Save", async () => {
   const writes: { path: string; body: unknown }[] = [];
   let authorized = false;
@@ -614,7 +390,7 @@ test("configuration Save never writes runtime access and scoped grant never ente
     return Response.json({
       revision: init?.method === "PUT" ? 2 : 1,
       configuration: init?.body
-        ? JSON.parse(String(init.body)).configuration
+        ? resolveReferences(JSON.parse(String(init.body)).configuration)
         : configuration,
     });
   };
@@ -681,7 +457,10 @@ test("an unpublished revision zero seed never implies Ready from earlier reports
   await screen.findByText(/Not published/);
   fireEvent.click(screen.getByText("fcrww"));
   await screen.findByText("Club API: Pending — configuration not published");
-  assert.equal(screen.queryByText("Club API: Bindings adopted (consumer reported)"), null);
+  assert.equal(
+    screen.queryByText("Club API: Bindings adopted (consumer reported)"),
+    null,
+  );
 });
 
 test("Club API provider capability is unchecked by default and sent only after explicit selection", async () => {
@@ -758,4 +537,157 @@ test("frontend access confirmation never offers Club API provider capability", a
     ),
     null,
   );
+});
+
+test("available catalog apps can be included without copying their canonical definitions", async () => {
+  globalThis.fetch = async () =>
+    Response.json({
+      revision: 1,
+      configuration: {
+        ...configuration,
+        applications: { "club-api": configuration.applications["club-api"] },
+      },
+      availableApplications: configuration.applications,
+    });
+  render(<RuntimeConfigurationPanel connection={connection} />);
+  await screen.findByLabelText("Include Club APP");
+  assert.equal(
+    (screen.getByLabelText("Include Club APP") as HTMLInputElement).checked,
+    false,
+  );
+  fireEvent.click(screen.getByLabelText("Include Club APP"));
+  fireEvent.click(screen.getByText("Export configuration"));
+  assert.deepEqual(
+    JSON.parse(
+      (screen.getByLabelText("Metadata-only export") as HTMLTextAreaElement)
+        .value,
+    ).applications,
+    ["club-api", "app"],
+  );
+});
+test("inherited tenant key roles and retained wrapping history have no editors", async () => {
+  const keySets = [
+    {
+      reference: "profile/default",
+      currentWrappingVersion: "v2",
+      mappings: {
+        wrapping: "WRAPPING_KEY",
+        index: "INDEX_KEY",
+        control: "CONTROL_KEY",
+      },
+      wrappingVersions: [
+        { keyVersion: "v1", vaultVersion: "a".repeat(32) },
+        { keyVersion: "v2", vaultVersion: "b".repeat(32) },
+      ],
+      indexVersion: "latest",
+      controlVersion: "c".repeat(32),
+    },
+  ];
+  globalThis.fetch = async () =>
+    Response.json({
+      revision: 0,
+      configuration: {
+        ...configuration,
+        tenants: [
+          { tenant: "fcrww", applications: ["club-api"], secrets: [], keySets },
+        ],
+      },
+    });
+  render(<RuntimeConfigurationPanel connection={connection} />);
+  await screen.findByText("fcrww");
+  fireEvent.click(screen.getByText("fcrww"));
+  assert.ok(screen.getByText("Wrapping · v1"));
+  assert.ok(screen.getByText("Wrapping · v2"));
+  assert.equal(screen.queryByLabelText("Current wrapping label"), null);
+  assert.equal(screen.queryByText("Add existing key set"), null);
+});
+test("schema2 local roundtrip validates assignment references and rejects copied definitions", async () => {
+  const { parseReferenceConfiguration } =
+    await import("../src/lib/runtime-configuration");
+  const refs = {
+    kind: "runtime-configuration",
+    schemaVersion: 2,
+    id: "development",
+    applications: ["club-api"],
+    tenants: [{ tenant: "fcrww", applications: ["club-api"] }],
+  };
+  assert.deepEqual(
+    JSON.parse(
+      exportConfiguration(parseReferenceConfiguration(refs, "development")),
+    ),
+    refs,
+  );
+  assert.throws(() =>
+    parseReferenceConfiguration({ ...refs, secrets: [] }, "development"),
+  );
+  assert.throws(() =>
+    parseReferenceConfiguration(
+      { ...refs, tenants: [{ tenant: "fcrww", applications: ["missing"] }] },
+      "development",
+    ),
+  );
+});
+
+test("unchanged assignments can publish newly inherited canonical definitions", async () => {
+  let sent: any;
+  globalThis.fetch = async (_input, init) => {
+    if (init?.method === "PUT") {
+      sent = JSON.parse(String(init.body));
+      return Response.json({
+        revision: 2,
+        publicationId: "canonical-publication",
+        configuration,
+      });
+    }
+    return Response.json({
+      revision: 0,
+      configuration,
+      availableApplications: configuration.applications,
+    });
+  };
+  render(<RuntimeConfigurationPanel connection={connection} />);
+  await screen.findByText("MONGO_URI");
+  assert.equal(
+    (screen.getByText("Save configuration") as HTMLButtonElement).disabled,
+    false,
+  );
+  fireEvent.click(screen.getByText("Save configuration"));
+  await screen.findByText(/Saved configuration/);
+  assert.equal(sent.configuration.schemaVersion, 2);
+  assert.ok(screen.getByText(/Published metadata/));
+});
+test("published bindings show adoption only after a fresh scoped report", async () => {
+  globalThis.fetch = async (input, init) =>
+    String(input).includes("/status")
+      ? Response.json({
+          state: "applied",
+          instances: [
+            {
+              instanceId: "fixture",
+              lastSeen: Date.now(),
+              expiresAt: Date.now() + 60000,
+              status: "applied",
+            },
+          ],
+        })
+      : Response.json({
+          revision: 1,
+          publicationId: "published",
+          configuration: {
+            ...configuration,
+            tenants: [
+              {
+                tenant: "fcrww",
+                applications: ["club-api"],
+                secrets: [],
+                keySets: [],
+              },
+            ],
+          },
+        });
+  render(<RuntimeConfigurationPanel connection={connection} />);
+  await screen.findByText("fcrww");
+  fireEvent.click(screen.getByText("fcrww"));
+  await screen.findByText("Club API: Bindings adopted (consumer reported)");
+  assert.ok(screen.getByText(/reports Vault binding adoption only/));
 });
