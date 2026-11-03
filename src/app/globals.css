@@ -1263,3 +1263,33 @@ main {
 .secret-copy-inline .error {
   font-size: 12px;
 }
+
+/* Application modelling: readable resource cards on both desktop and mobile. */
+.applications-layout { display: grid; gap: 20px; }
+.applications-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.applications-layout h2, .applications-layout h3 { margin: 0 0 12px; }
+.applications-layout p { line-height: 1.6; color: var(--text-secondary, #64748b); }
+.applications-layout form { display: grid; gap: 14px; margin-top: 24px; max-width: 640px; }
+.applications-layout label { display: grid; gap: 7px; font-weight: 600; }
+.applications-layout input, .applications-layout select { width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: white; color: #172033; font: inherit; }
+.applications-layout input[readonly] { background: #f1f5f9; }
+.applications-layout button { min-height: 40px; border-radius: 7px; padding: 8px 14px; font: inherit; cursor: pointer; }
+.applications-layout button:disabled { cursor: default; opacity: .55; }
+.applications-layout .primary-button { background: #2563eb; color: white; border: 1px solid #2563eb; }
+.applications-layout .secondary-button { background: white; border: 1px solid #cbd5e1; color: #172033; }
+.application-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.application-list .selected { border-color: #2563eb; background: #eff6ff; }
+.application-resources { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; }
+.application-resource { border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; min-width: 0; }
+.application-resource h4 { margin: 0 0 16px; overflow-wrap: anywhere; }
+.application-resource h4 small { display: block; margin-top: 5px; color: #64748b; font-weight: 400; }
+.application-resource dl { display: grid; gap: 5px; }
+.application-resource dt { font-size: .8rem; font-weight: 600; color: #64748b; }
+.application-resource dd { margin: 0 0 10px; overflow-wrap: anywhere; }
+.application-resource code { overflow-wrap: anywhere; }
+.application-resource details { margin: 14px 0; }
+.application-resource button { margin: 4px 8px 0 0; }
+.application-status { padding: 12px 16px; border-left: 3px solid #d97706; background: #fffbeb; }
+.applications-layout .error-message { padding: 14px; color: #991b1b; background: #fef2f2; border-radius: 8px; }
+.applications-layout :focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
+@media(max-width: 640px) { .applications-toolbar { align-items: stretch; flex-direction: column; } .application-resources { grid-template-columns: 1fr; } }
