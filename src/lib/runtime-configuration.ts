@@ -1,4 +1,5 @@
 export interface SecretSelection {
+  displayName?: string;
   purpose: string;
   mapping: string;
   version?: string;
@@ -66,9 +67,10 @@ function mapping(v: unknown): string {
 }
 function secrets(v: unknown, allowUnresolved = false): SecretSelection[] {
   return list(v).map((raw) => {
-    const s = object(raw, ["purpose", "mapping", "version"]);
+    const s = object(raw, ["purpose", "mapping", "version", "displayName"]);
     return {
       purpose: string(s.purpose, 128),
+      ...(s.displayName === undefined ? {} : {displayName: string(s.displayName, 160)}),
       mapping: mapping(s.mapping),
       ...(s.version === undefined && allowUnresolved
         ? {}

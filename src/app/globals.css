@@ -1400,3 +1400,11 @@ main {
   font-weight: 600;
   text-align: left;
 }
+
+.runtime-credential-id {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-secondary, #64748b);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}

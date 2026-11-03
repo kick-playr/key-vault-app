@@ -712,3 +712,11 @@ test("existing tenant loads from its own grant field without retyping its name",
   assert.equal(grant.value,"");
   assert.ok(screen.getByLabelText("Club API consumes fcrww"));
 });
+test("runtime credential rows show readable names with technical purpose underneath", async () => {
+  const purpose="runtime-credential-aaaaaaaaaaaaaaaaaaaaaaaa";
+  globalThis.fetch=async()=>Response.json({revision:0,configuration:{...configuration,tenants:[{tenant:"fcrww",applications:["club-api"],secrets:[{purpose,mapping:"RUNTIME_CREDENTIAL_AAAAAAAAAAAAAAAAAAAAAAAA",version:"latest",displayName:"Bexio OAuth credentials"}],keySets:[]}]}});
+  render(<RuntimeConfigurationPanel connection={connection}/>);
+  fireEvent.click(await screen.findByText("fcrww"));
+  const title=await screen.findByText("Bexio OAuth credentials");
+  assert.equal(title.closest("td")?.querySelector("small")?.textContent,purpose);
+});

@@ -38,7 +38,12 @@ function InheritedBindings({
           <tbody>
             {secrets.map((s, index) => (
               <tr key={index}>
-                <td>{s.purpose}</td>
+                <td>
+                  {s.displayName || (/^runtime-credential-[a-f0-9]{24}$/.test(s.purpose) ? "Integration credentials" : s.purpose)}
+                  {(s.displayName || /^runtime-credential-[a-f0-9]{24}$/.test(s.purpose)) && (
+                    <small className="runtime-credential-id">{s.purpose}</small>
+                  )}
+                </td>
                 <td>
                   <code>{s.mapping}</code>
                 </td>
