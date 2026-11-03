@@ -114,6 +114,7 @@ export function RuntimeConfigurationPanel({
     [availableApplications, setAvailableApplications] = useState<
       RuntimeConfigurationDocument["applications"]
     >({});
+  const [expandedApps, setExpandedApps] = useState<Record<string, boolean>>({});
   const [selectedApps, setSelectedApps] = useState<string[]>([]),
     [revision, setRevision] = useState(0),
     [published, setPublished] = useState(false),
@@ -242,6 +243,7 @@ export function RuntimeConfigurationPanel({
         typeof raw.publicationId === "string" && raw.publicationId.length > 0,
       );
       setSelectedTenant("");
+      setExpandedApps({});
       setConflict(false);
       credentials.current = {};
       generations.current = {};
@@ -414,21 +416,35 @@ export function RuntimeConfigurationPanel({
             </p>
             {catalogError && <p role="status">{catalogError}</p>}
             {Object.entries(names).map(([slug, a]) => (
-              <div key={slug}>
-                <label className="runtime-app-choice">
-                  <input
-                    type="checkbox"
-                    aria-label={"Include " + a.displayName}
-                    checked={selectedApps.includes(slug)}
-                    onChange={(e) => selectApp(slug, e.target.checked)}
-                  />
-                  {a.displayName}
-                </label>
-                <p>
-                  <code>{slug}</code> · {a.description}
-                </p>
-                {selectedApps.includes(slug) && (
-                  <InheritedBindings secrets={a.secrets} />
+              <div key={slug} className="runtime-app-row">
+                <div className="runtime-app-header">
+                  <label className="runtime-app-choice">
+                    <input
+                      type="checkbox"
+                      aria-label={"Include " + a.displayName}
+                      checked={selectedApps.includes(slug)}
+                      onChange={(e) => selectApp(slug, e.target.checked)}
+                    />
+                    {a.displayName}
+                  </label>
+                  <button
+                    type="button"
+                    className="runtime-app-toggle"
+                    aria-label={`${expandedApps[slug] ? "Collapse" : "Expand"} ${a.displayName} details`}
+                    aria-expanded={!!expandedApps[slug]}
+                    aria-controls={`app-details-${slug}`}
+                    onClick={() => setExpandedApps((current) => ({...current,[slug]:!current[slug]}))}
+                  >
+                    {expandedApps[slug]
+                      ? <ChevronUpIcon aria-hidden="true" />
+                      : <ChevronDownIcon aria-hidden="true" />}
+                  </button>
+                </div>
+                {expandedApps[slug] && (
+                  <div id={`app-details-${slug}`}>
+                    <p><code>{slug}</code> · {a.description}</p>
+                    <InheritedBindings secrets={a.secrets} />
+                  </div>
                 )}
               </div>
             ))}

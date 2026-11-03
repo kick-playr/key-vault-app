@@ -122,6 +122,7 @@ test("canonical bindings are read-only and Save sends reference-only selections"
     return Response.json({ revision: 1, configuration });
   };
   render(<RuntimeConfigurationPanel connection={connection} />);
+  fireEvent.click(await screen.findByRole("button", {name:"Expand Club API details"}));
   await screen.findByText("MONGO_URI");
   assert.equal(screen.queryByLabelText("ENV mapping"), null);
   assert.equal(screen.queryByText("Add secret binding"), null);
@@ -164,6 +165,7 @@ test("legacy and schema2 imports stage canonical assignment previews and cancell
         : { revision: 1, configuration },
     );
   render(<RuntimeConfigurationPanel connection={connection} />);
+  fireEvent.click(await screen.findByRole("button", {name:"Expand Club API details"}));
   await screen.findByText("MONGO_URI");
   fireEvent.change(screen.getByLabelText("Import configuration JSON"), {
     target: {
@@ -646,6 +648,7 @@ test("unchanged assignments can publish newly inherited canonical definitions", 
     });
   };
   render(<RuntimeConfigurationPanel connection={connection} />);
+  fireEvent.click(await screen.findByRole("button", {name:"Expand Club API details"}));
   await screen.findByText("MONGO_URI");
   assert.equal(
     (screen.getByText("Save configuration") as HTMLButtonElement).disabled,
@@ -736,4 +739,17 @@ test("tenant expand control starts collapsed and toggles grant and details toget
   fireEvent.click(collapse);
   assert.equal(screen.queryByLabelText("Grant for fcrww"),null);
   assert.equal(screen.queryByRole("region",{name:"Bindings for fcrww"}),null);
+});
+test("application details start collapsed and expand independently of selection",async()=>{
+ globalThis.fetch=async()=>Response.json({revision:0,configuration});
+ render(<RuntimeConfigurationPanel connection={connection}/>);
+ const expand=await screen.findByRole("button",{name:"Expand Club API details"});
+ assert.equal(expand.getAttribute("aria-expanded"),"false");
+ assert.equal(screen.queryByText("MONGO_URI"),null);
+ assert.equal((screen.getByLabelText("Include Club API") as HTMLInputElement).checked,true);
+ fireEvent.click(expand);
+ assert.ok(screen.getByText("MONGO_URI"));
+ fireEvent.click(screen.getByRole("button",{name:"Collapse Club API details"}));
+ assert.equal(screen.queryByText("MONGO_URI"),null);
+ assert.equal((screen.getByLabelText("Include Club API") as HTMLInputElement).checked,true);
 });

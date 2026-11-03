@@ -1431,3 +1431,28 @@ main {
   width: 20px;
   height: 20px;
 }
+
+.runtime-app-row {
+  padding: 12px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+.runtime-app-row:last-child { border-bottom: 0; }
+.runtime-app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.applications-layout .runtime-app-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+}
+.applications-layout .runtime-app-toggle:hover { background: #eff6ff; }
+.runtime-app-toggle svg { width: 20px; height: 20px; }
