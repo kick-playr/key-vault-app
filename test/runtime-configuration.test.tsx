@@ -691,3 +691,24 @@ test("published bindings show adoption only after a fresh scoped report", async 
   await screen.findByText("Club API: Bindings adopted (consumer reported)");
   assert.ok(screen.getByText(/reports Vault binding adoption only/));
 });
+
+test("existing tenant loads from its own grant field without retyping its name", async () => {
+  let loaded: any;
+  globalThis.fetch = async (_url, options) => {
+    const body = {path:String(_url),headers:options?.headers as Record<string,string>};
+    if (body.path.endsWith("/tenants/fcrww")) {
+      loaded = body;
+      return Response.json({tenant:"fcrww", secrets:[], keySets:[], generation:2});
+    }
+    return Response.json({revision:0, configuration:{...configuration,tenants:[{tenant:"fcrww",applications:["club-api"],secrets:[],keySets:[]}]}});
+  };
+  render(<RuntimeConfigurationPanel connection={connection} />);
+  const grant = await screen.findByLabelText("Grant for fcrww") as HTMLInputElement;
+  fireEvent.change(grant,{target:{value:"tenant-row-grant-aaaaaaaaaaaaaaaaaaaaaaaa"}});
+  fireEvent.click(screen.getByRole("button",{name:"Load"}));
+  await waitFor(()=>assert.ok(loaded));
+  assert.equal(loaded.headers["x-vault-tenant"],"fcrww");
+  assert.equal(loaded.headers["x-vault-token"],"tenant-row-grant-aaaaaaaaaaaaaaaaaaaaaaaa");
+  assert.equal(grant.value,"");
+  assert.ok(screen.getByLabelText("Club API consumes fcrww"));
+});

@@ -1365,3 +1365,10 @@ main {
   margin: 0;
   padding: 0;
 }
+
+.applications-layout .runtime-tenant-load {
+  margin-top: 10px;
+  gap: 8px;
+  min-width: 180px;
+  max-width: 280px;
+}

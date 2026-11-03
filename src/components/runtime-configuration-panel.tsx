@@ -274,6 +274,52 @@ export function RuntimeConfigurationPanel({
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
+  function loadTenant(name: string, token: string) {
+    if (!configuration) return;
+    void perform(async () => {
+      const raw = await request(
+        "local/runtime-configuration/tenants/" +
+          encodeURIComponent(name),
+        "GET",
+        undefined,
+        name,
+        token,
+      );
+      const loaded = parseTenant(
+        {
+          tenant: raw.tenant,
+          applications: [],
+          secrets: raw.secrets,
+          keySets: raw.keySets,
+        },
+        true,
+      );
+      if (
+        loaded.tenant !== name ||
+        !Number.isSafeInteger(raw.generation) ||
+        raw.generation < 0
+      )
+        throw Error("Invalid tenant canonical preview.");
+      if (controller.current?.signal.aborted) return;
+      credentials.current[name] = token;
+      generations.current[name] = raw.generation;
+      const existing = configuration.tenants.find(
+        (t) => t.tenant === name,
+      );
+      setConfiguration({
+        ...configuration,
+        tenants: existing
+          ? configuration.tenants.map((t) =>
+              t.tenant === name
+                ? { ...loaded, applications: existing.applications }
+                : t,
+            )
+          : [...configuration.tenants, loaded],
+      });
+      if (!existing) mark(true);
+      setSelectedTenant(name);
+    });
+  }
   const names = { ...availableApplications, ...configuration?.applications };
   const tenant = configuration?.tenants.find(
     (t) => t.tenant === selectedTenant,
@@ -388,82 +434,43 @@ export function RuntimeConfigurationPanel({
               Canonical tenant definitions own the inherited secrets and key
               histories.
             </p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const name = tenantInput.current?.value ?? "",
-                  token = grantInput.current?.value || connection.token;
-                if (grantInput.current) grantInput.current.value = "";
-                if (!/^[A-Za-z0-9_-]{1,64}$/.test(name) || name === "_shared") {
-                  setError("Enter an existing tenant slug.");
-                  return;
-                }
-                void perform(async () => {
-                  const raw = await request(
-                    "local/runtime-configuration/tenants/" +
-                      encodeURIComponent(name),
-                    "GET",
-                    undefined,
-                    name,
-                    token,
-                  );
-                  const loaded = parseTenant(
-                    {
-                      tenant: raw.tenant,
-                      applications: [],
-                      secrets: raw.secrets,
-                      keySets: raw.keySets,
-                    },
-                    true,
-                  );
-                  if (
-                    loaded.tenant !== name ||
-                    !Number.isSafeInteger(raw.generation) ||
-                    raw.generation < 0
-                  )
-                    throw Error("Invalid tenant canonical preview.");
-                  if (controller.current?.signal.aborted) return;
-                  credentials.current[name] = token;
-                  generations.current[name] = raw.generation;
-                  const existing = configuration.tenants.find(
-                    (t) => t.tenant === name,
-                  );
-                  setConfiguration({
-                    ...configuration,
-                    tenants: existing
-                      ? configuration.tenants.map((t) =>
-                          t.tenant === name
-                            ? { ...loaded, applications: existing.applications }
-                            : t,
-                        )
-                      : [...configuration.tenants, loaded],
-                  });
-                  if (!existing) mark(true);
-                  setSelectedTenant(name);
-                });
-              }}
-            >
-              <label>
-                Existing tenant slug
-                <input
-                  ref={tenantInput}
-                  required
-                  pattern="[A-Za-z0-9_-]{1,64}"
-                />
-              </label>
-              <label>
-                Tenant grant (optional)
-                <input
-                  ref={grantInput}
-                  type="password"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </label>
-              <button className="secondary-button" disabled={busy}>
-                Load tenant
-              </button>
-            </form>
+            <details>
+              <summary>Add tenant</summary>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const name = tenantInput.current?.value ?? "",
+                    token = grantInput.current?.value || connection.token;
+                  if (grantInput.current) grantInput.current.value = "";
+                  if (!/^[A-Za-z0-9_-]{1,64}$/.test(name) || name === "_shared") {
+                    setError("Enter an existing tenant slug.");
+                    return;
+                  }
+                  loadTenant(name, token);
+                }}
+              >
+                <label>
+                  Existing tenant slug
+                  <input
+                    ref={tenantInput}
+                    required
+                    pattern="[A-Za-z0-9_-]{1,64}"
+                  />
+                </label>
+                <label>
+                  Tenant grant (optional)
+                  <input
+                    ref={grantInput}
+                    type="password"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </label>
+                <button className="secondary-button" disabled={busy}>
+                  Load tenant
+                </button>
+              </form>
+            </details>
             <table className="applications-catalog-table">
               <thead>
                 <tr>
@@ -482,6 +489,23 @@ export function RuntimeConfigurationPanel({
                       >
                         {t.tenant}
                       </button>
+                      <form
+                        className="runtime-tenant-load"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          const input = e.currentTarget.elements.namedItem("grant") as HTMLInputElement;
+                          const token = input.value || credentials.current[t.tenant] || connection.token;
+                          input.value = "";
+                          loadTenant(t.tenant, token);
+                        }}
+                      >
+                        <label>
+                          Grant
+                          <input name="grant" aria-label={"Grant for " + t.tenant}
+                            type="password" autoComplete="off" spellCheck={false} />
+                        </label>
+                        <button className="secondary-button" disabled={busy}>Load</button>
+                      </form>
                     </td>
                     <td>
                       {t.applications
