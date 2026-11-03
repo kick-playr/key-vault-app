@@ -1,4 +1,5 @@
 "use client";
+import { VAULT_UI_REQUEST_TIMEOUT_MS } from "../lib/vault-request";
 import { secretValueFormatLabel } from '../lib/secret-value-format';
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -94,7 +95,7 @@ export function InventoryPanel({
           "x-vault-tenant": connection.tenant,
         },
         cache: "no-store",
-        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]),
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(VAULT_UI_REQUEST_TIMEOUT_MS)]),
       });
       if (current !== generation.current) return;
       if (!response.ok) {

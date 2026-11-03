@@ -1,4 +1,5 @@
 'use client';
+import { VAULT_UI_REQUEST_TIMEOUT_MS } from "../lib/vault-request";
 import { ApplicationLinksTable } from './application-links-table';
 import { parseVersions } from '../lib/azure-vault';
 import { DiscardDialog } from './discard-dialog';
@@ -187,7 +188,7 @@ export function ApplicationsPanel({
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       cache: 'no-store',
-      signal: AbortSignal.any([signal, AbortSignal.timeout(8000)]),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(VAULT_UI_REQUEST_TIMEOUT_MS)]),
     });
     if (!response.ok) {
       if (response.status === 401) onUnauthorized?.();
@@ -292,7 +293,7 @@ export function ApplicationsPanel({
               'x-vault-tenant': connection.tenant,
             },
             cache: 'no-store',
-            signal: AbortSignal.any([abort.signal, AbortSignal.timeout(8000)]),
+            signal: AbortSignal.any([abort.signal, AbortSignal.timeout(VAULT_UI_REQUEST_TIMEOUT_MS)]),
           },
         );
         if (cancelled) return;

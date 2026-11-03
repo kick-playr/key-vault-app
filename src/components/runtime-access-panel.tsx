@@ -1,4 +1,5 @@
 "use client";
+import { VAULT_UI_REQUEST_TIMEOUT_MS } from "../lib/vault-request";
 import React, { useEffect, useRef, useState } from "react";
 import type { RuntimeConfigurationDocument } from "../lib/runtime-configuration";
 type Access = {
@@ -124,7 +125,7 @@ function ApplicationTenantAccess({
                 allow,
                 ...(oauth === undefined ? {} : { oauth }),
               }),
-        signal: AbortSignal.any([signal, AbortSignal.timeout(8000)]),
+        signal: AbortSignal.any([signal, AbortSignal.timeout(VAULT_UI_REQUEST_TIMEOUT_MS)]),
         cache: "no-store",
       },
     );

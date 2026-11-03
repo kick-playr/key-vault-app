@@ -1,3 +1,4 @@
+import { VAULT_UI_REQUEST_TIMEOUT_MS } from "../lib/vault-request";
 import { secretValueFormatLabel } from '../lib/secret-value-format';
 import { SecretVersionValue } from "./secret-version-value";
 import { DiscardDialog } from "./discard-dialog";
@@ -94,7 +95,7 @@ export function AzureVaultPanel({
         ...(init.body ? { "content-type": "application/json" } : {}),
       },
       cache: "no-store",
-      signal: AbortSignal.any([task.signal, AbortSignal.timeout(8000)]),
+      signal: AbortSignal.any([task.signal, AbortSignal.timeout(VAULT_UI_REQUEST_TIMEOUT_MS)]),
     });
     if (!current(task)) throw Error("Cancelled");
     if (!response.ok) {
@@ -129,7 +130,9 @@ export function AzureVaultPanel({
             e.name === "TimeoutError" ||
             e instanceof TypeError)
           ? "The write outcome is unknown. Refresh and check version history before submitting again."
-          : e instanceof Error
+          : e instanceof Error && e.name === "TimeoutError"
+            ? "The Vault request timed out. Please retry; the first request after startup can take longer."
+            : e instanceof Error
             ? e.message
             : "Vault request failed.",
       );

@@ -1,3 +1,4 @@
+import { VAULT_UI_REQUEST_TIMEOUT_MS } from "../lib/vault-request";
 import { DocumentDuplicateIcon } from "@heroicons/react/24/outline";
 import React, { useEffect, useRef, useState } from "react";
 import { parseVersions } from "../lib/azure-vault";
@@ -79,7 +80,7 @@ export function SecretVersionValue({
           "x-vault-tenant": connection.tenant,
         },
         cache: "no-store",
-        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]),
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(VAULT_UI_REQUEST_TIMEOUT_MS)]),
       },
     );
     if (!alive.current || current !== generation.current)

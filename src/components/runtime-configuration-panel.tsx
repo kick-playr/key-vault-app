@@ -1,4 +1,5 @@
 "use client";
+import { VAULT_UI_REQUEST_TIMEOUT_MS } from "../lib/vault-request";
 import React, { useEffect, useRef, useState } from "react";
 import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/24/outline";
 import { DiscardDialog } from "./discard-dialog";
@@ -170,8 +171,8 @@ export function RuntimeConfigurationPanel({
       body: body ? JSON.stringify(body) : undefined,
       cache: "no-store",
       signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(8000)])
-        : AbortSignal.timeout(8000),
+        ? AbortSignal.any([signal, AbortSignal.timeout(VAULT_UI_REQUEST_TIMEOUT_MS)])
+        : AbortSignal.timeout(VAULT_UI_REQUEST_TIMEOUT_MS),
     });
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     if (!response.ok) {

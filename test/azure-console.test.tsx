@@ -702,3 +702,11 @@ test('secret create requires an explicit format and submits hex text unchanged',
   fireEvent.change(format,{target:{value:'hex64'}});fireEvent.click(screen.getByRole('button',{name:'Create secret'}));
   await screen.findByText(/Saved to vault/);assert.equal(calls.find(c=>c.method==='PUT')?.body?.valueFormat,'hex64');assert.equal(calls.find(c=>c.method==='PUT')?.body?.value,value);
 });
+test('signed-in inventory requests allow the cold authentication startup budget',async()=>{
+ const original=AbortSignal.timeout;const budgets:number[]=[];
+ AbortSignal.timeout=(milliseconds:number)=>{budgets.push(milliseconds);return original(60000);};
+ try{setup();await secrets();await screen.findByRole('button',{name:'Refresh list'});assert.ok(budgets.length>=2);assert.ok(budgets.every(ms=>ms>=20000),'connection and list must include the authentication startup budget');}finally{AbortSignal.timeout=original;}
+});
+test('inventory timeout gives a retry instruction instead of a raw signal error',async()=>{
+ setup(async()=>{throw new DOMException('signal timed out','TimeoutError');});await secrets();const alert=await screen.findByRole('alert');assert.match(alert.textContent??'',/request timed out.*retry/i);assert.equal(alert.textContent?.includes('signal timed out'),false);
+});

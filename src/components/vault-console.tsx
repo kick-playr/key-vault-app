@@ -1,4 +1,5 @@
 "use client";
+import { VAULT_UI_REQUEST_TIMEOUT_MS } from "../lib/vault-request";
 import React, { useEffect, useRef, useState } from "react";
 import {
   KeyIcon,
@@ -156,7 +157,7 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
           "x-vault-tenant": tenant,
         },
         cache: "no-store",
-        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]),
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(VAULT_UI_REQUEST_TIMEOUT_MS)]),
       });
       if (current !== sequence.current) return;
       if (!response.ok) {
