@@ -145,14 +145,20 @@ test('creates and edits apps, links an existing secret, shows canonical sharing 
   };
   render(<ApplicationsPanel connection={connection} />);
   await screen.findByText('No applications in this namespace.');
-  fireEvent.change(screen.getByLabelText('Application name'), {
+  assert.equal(screen.queryByLabelText('Application slug'), null);
+  fireEvent.click(screen.getByRole('button', {name:'New application'}));
+  fireEvent.change(screen.getByLabelText('Application slug'), {
     target: { value: 'club-api' },
   });
   fireEvent.change(screen.getByLabelText('Display name'), {
     target: { value: 'Club API' },
   });
+  fireEvent.change(screen.getByLabelText('Description'), {target:{value:'Club operations and tenant secrets'}});
   fireEvent.click(screen.getByRole('button', { name: 'Create application' }));
   await screen.findByRole('button', { name: 'Club API' });
+  assert.equal(screen.queryByLabelText('Application slug'),null);
+  assert.ok(screen.getByRole('columnheader',{name:'Slug'}));
+  assert.ok(screen.getByText('Club operations and tenant secrets'));
   fireEvent.click(screen.getByRole('button', { name: 'Club API' }));
   await screen.findByText('Format: Plain text');
   fireEvent.click(await screen.findByLabelText('Select database'));
@@ -220,7 +226,7 @@ test('Applications is reachable from the console without replacing existing sect
   fireEvent.click(screen.getByRole('button', { name: 'Connect to namespace' }));
   await screen.findByRole('button', { name: 'Disconnect' });
   fireEvent.click(screen.getByRole('button', { name: 'Applications' }));
-  await screen.findByRole('button', { name: 'Create application' });
+  await screen.findByRole('button', { name: 'New application' });
   for (const name of [
     'Keys',
     'Secrets',
@@ -1083,3 +1089,19 @@ for (const used of [false, true])
       assert.equal(deleted, true);
     }
   });
+
+test('new application fields open on demand and cancel closes without writing',async()=>{
+  const writes:string[]=[];
+  globalThis.fetch=async(input,init)=>{
+    if(init?.method&&init.method!=='GET')writes.push(String(input));
+    return Response.json(String(input).includes('inventory')?{value:[]}:{revision:0,generation:0,...connection,applications:[]});
+  };
+  render(<ApplicationsPanel connection={connection}/>);
+  await screen.findByRole('button',{name:'New application'});
+  assert.equal(screen.queryByLabelText('Application slug'),null);
+  fireEvent.click(screen.getByRole('button',{name:'New application'}));
+  assert.equal(document.activeElement,screen.getByLabelText('Application slug'));
+  assert.ok(screen.getByLabelText('Description'));
+  fireEvent.click(screen.getByRole('button',{name:'Cancel'}));
+  assert.equal(screen.queryByLabelText('Application slug'),null);assert.deepEqual(writes,[]);
+});

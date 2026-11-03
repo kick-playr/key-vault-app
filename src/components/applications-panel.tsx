@@ -45,6 +45,8 @@ export function ApplicationsPanel({
   const [description, setDescription] = useState('');
   const [createName, setCreateName] = useState('');
   const [createLabel, setCreateLabel] = useState('');
+  const [createDescription, setCreateDescription] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
   const [inventory, setInventory] = useState<InventoryRow[]>([]);
   const [tableEpoch, setTableEpoch] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -250,6 +252,8 @@ export function ApplicationsPanel({
       setDescription(fresh?.description ?? '');
       setCreateName('');
       setCreateLabel('');
+      setCreateDescription('');
+      setShowCreate(false);
 
       if (catalogToken.current) catalogToken.current.value = '';
     } catch (e) {
@@ -341,8 +345,14 @@ export function ApplicationsPanel({
       dirty.current = dirtyAreas.current.size > 0;
       onDirty?.(dirty.current);
       if (area === 'create') {
+        setSelected(createName);
+        setDisplayName(createLabel);
+        setDescription(createDescription);
+        setTableEpoch(v => v + 1);
+        setShowCreate(false);
         setCreateName('');
         setCreateLabel('');
+        setCreateDescription('');
       }
 
       return true;
@@ -355,6 +365,10 @@ export function ApplicationsPanel({
     }
   }
   function select(name: string) {
+    setShowCreate(false);
+    setCreateName('');
+    setCreateLabel('');
+    setCreateDescription('');
     const a = model?.applications.find((x) => x.name === name);
     setSelected(name);
     setTableEpoch((value) => value + 1);
@@ -405,34 +419,41 @@ export function ApplicationsPanel({
       {model && (
         <>
           <section className="panel applications-catalog">
-            <h2>Application model</h2>
-            {!model.applications.length && (
-              <p>No applications in this namespace.</p>
-            )}
-            <div className="application-list">
-              {model.applications.map((a) => (
-                <button
-                  className={
-                    'secondary-button ' +
-                    (selected === a.name ? 'selected' : '')
-                  }
-                  key={a.name}
-                  aria-pressed={selected === a.name}
-                  disabled={busy}
-                  onClick={() => guarded(() => select(a.name))}
-                >
-                  {a.displayName}
-                </button>
-              ))}
+            <div className="applications-catalog-heading">
+              <div>
+                <h2>Application list</h2>
+                <p>Select an application to manage its details and secret links.</p>
+              </div>
+              {isShared && <button type="button" className="primary-button"
+                disabled={busy || conflicted} aria-expanded={showCreate} aria-controls="application-create-form"
+                onClick={() => guarded(() => { select(''); setShowCreate(true); })}>
+                New application
+              </button>}
             </div>
-            {isShared ? (
-              <form
+            {!model.applications.length ? <p>No applications in this namespace.</p> : (
+              <div className="applications-catalog-scroll">
+                <table className="applications-catalog-table" aria-label="Applications">
+                  <thead><tr><th scope="col">Application</th><th scope="col">Slug</th><th scope="col">Description</th><th scope="col">Linked resources</th></tr></thead>
+                  <tbody>{model.applications.map(a => (
+                    <tr key={a.name} className={selected === a.name ? 'is-selected' : ''}>
+                      <th scope="row"><button type="button" className="secondary-button" aria-pressed={selected === a.name} disabled={busy}
+                        onClick={() => guarded(() => select(a.name))}>{a.displayName}</button></th>
+                      <td><code>{a.name}</code></td>
+                      <td>{a.description || <span className="application-empty-description">No description</span>}</td>
+                      <td>{a.resources.length}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            )}
+            {isShared ? showCreate && (
+              <form id="application-create-form" className="application-create-form"
                 onChange={() => markDirty(true, 'create')}
                 onSubmit={(e) => {
                   e.preventDefault();
                   void mutate(
                     'local/applications/' + encodeURIComponent(createName),
-                    { displayName: createLabel, description: '' },
+                    { displayName: createLabel, description: createDescription },
                     'PUT',
                     'create',
                   );
@@ -440,8 +461,9 @@ export function ApplicationsPanel({
               >
                 <h3>Create application</h3>
                 <label>
-                  Application name
+                  Application slug
                   <input
+                    autoFocus
                     value={createName}
                     onChange={(e) => setCreateName(e.target.value)}
                     pattern="[a-z][a-z0-9-]{0,63}"
@@ -460,12 +482,16 @@ export function ApplicationsPanel({
                     placeholder="Club API"
                   />
                 </label>
-                <button
-                  className="primary-button"
-                  disabled={busy || conflicted}
-                >
-                  Create application
-                </button>
+                <label>
+                  Description
+                  <input value={createDescription} onChange={e => setCreateDescription(e.target.value)}
+                    maxLength={512} placeholder="What this application does and which secrets it uses" />
+                </label>
+                <div className="application-create-actions">
+                  <button className="primary-button" disabled={busy || conflicted}>Create application</button>
+                  <button type="button" className="secondary-button" disabled={busy}
+                    onClick={() => guarded(() => select(''))}>Cancel</button>
+                </div>
               </form>
             ) : (
               <form
