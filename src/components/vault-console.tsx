@@ -20,6 +20,7 @@ import { OperationForm } from "./operation-form";
 import { DiscardDialog } from "./discard-dialog";
 import { AzureVaultPanel } from "./azure-vault-panel";
 import { ApplicationsPanel } from "./applications-panel";
+import { RuntimeConfigurationPanel } from "./runtime-configuration-panel";
 import { InventoryPanel } from "./inventory-panel";
 import type { InventoryRow } from "../lib/inventory";
 const environments = [
@@ -46,6 +47,7 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
   const [connection, setConnection] = useState<Connection | null>(null);
   const [section, setSection] = useState<Section>("keys");
   const [applicationsOpen, setApplicationsOpen] = useState(false);
+  const [runtimeOpen, setRuntimeOpen] = useState(false);
   const [azureKind, setAzureKind] = useState<"keys" | "secrets" | null>(null);
   const [pendingNavigation, setPendingNavigation] = useState<() => void>();
   const dirtyInput = useRef(false);
@@ -110,6 +112,7 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
   }, []);
   function navigate(next: Section, azure = false) {
     setApplicationsOpen(false);
+    setRuntimeOpen(false);
     dirtyInput.current = false;
     setAzureKind(azure && next !== "advanced" ? next : null);
     clearOperation();
@@ -276,7 +279,41 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
           </span>
         </a>
         <nav aria-label="Vault sections">
-          <button className={"nav-item " + (applicationsOpen ? "active" : "")} aria-current={applicationsOpen ? "page" : undefined} onClick={() => guarded(() => { dirtyInput.current = false; clearOperation(); setAzureKind(null); setApplicationsOpen(true); })}><Square2StackIcon />Applications</button>
+          <button
+            className={
+              "nav-item " + (applicationsOpen && runtimeOpen ? "active" : "")
+            }
+            aria-current={applicationsOpen && runtimeOpen ? "page" : undefined}
+            onClick={() =>
+              guarded(() => {
+                dirtyInput.current = false;
+                clearOperation();
+                setAzureKind(null);
+                setApplicationsOpen(true);
+                setRuntimeOpen(true);
+              })
+            }
+          >
+            <Square2StackIcon />
+            Runtime configuration
+          </button>
+          <button
+            className={
+              "nav-item " + (applicationsOpen && !runtimeOpen ? "active" : "")
+            }
+            onClick={() =>
+              guarded(() => {
+                dirtyInput.current = false;
+                clearOperation();
+                setAzureKind(null);
+                setRuntimeOpen(false);
+                setApplicationsOpen(true);
+              })
+            }
+          >
+            <Square2StackIcon />
+            Applications
+          </button>
           {(
             [
               { id: "keys", label: "Keys", Icon: KeyIcon },
@@ -294,12 +331,14 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
               key={id}
               className={
                 "nav-item " +
-                ((!applicationsOpen && (azureKind ? `${azureKind}-azure` === id : section === id))
+                (!applicationsOpen &&
+                (azureKind ? `${azureKind}-azure` === id : section === id)
                   ? "active"
                   : "")
               }
               aria-current={
-                (!applicationsOpen && (azureKind ? `${azureKind}-azure` === id : section === id))
+                !applicationsOpen &&
+                (azureKind ? `${azureKind}-azure` === id : section === id)
                   ? "page"
                   : undefined
               }
@@ -355,13 +394,17 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
         <main id="main-content">
           <div className="page-heading">
             <h1>
-              {applicationsOpen ? "Applications" : azureKind
-                ? `${azureKind === "keys" ? "Keys" : "Secrets"} (Azure-style)`
-                : section === "keys"
-                  ? "Keys"
-                  : section === "secrets"
-                    ? "Secrets"
-                    : "Advanced"}
+              {applicationsOpen
+                ? runtimeOpen
+                  ? "Runtime configuration"
+                  : "Applications"
+                : azureKind
+                  ? `${azureKind === "keys" ? "Keys" : "Secrets"} (Azure-style)`
+                  : section === "keys"
+                    ? "Keys"
+                    : section === "secrets"
+                      ? "Secrets"
+                      : "Advanced"}
             </h1>
           </div>
           {pendingNavigation && (
@@ -471,7 +514,36 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
               )}
             </section>
           ) : applicationsOpen ? (
-            <ApplicationsPanel key={`${connection.environment}/${connection.tenant}/applications`} connection={connection} onDirty={value => { dirtyInput.current = value; }} onUnauthorized={() => { disconnect(); setError("Vault authentication expired. Reconnect with a valid token."); }} />
+            <>
+              {runtimeOpen ? (
+                <RuntimeConfigurationPanel
+                  key={`${connection.environment}/${connection.tenant}/applications`}
+                  connection={connection}
+                  onDirty={(value) => {
+                    dirtyInput.current = value;
+                  }}
+                  onUnauthorized={() => {
+                    disconnect();
+                    setError(
+                      "Vault authentication expired. Reconnect with a valid token.",
+                    );
+                  }}
+                />
+              ) : (
+                <ApplicationsPanel
+                  connection={connection}
+                  onDirty={(value) => {
+                    dirtyInput.current = value;
+                  }}
+                  onUnauthorized={() => {
+                    disconnect();
+                    setError(
+                      "Vault authentication expired. Reconnect with a valid token.",
+                    );
+                  }}
+                />
+              )}
+            </>
           ) : azureKind ? (
             <AzureVaultPanel
               key={`${connection.environment}/${connection.tenant}/${azureKind}/${formEpoch}`}

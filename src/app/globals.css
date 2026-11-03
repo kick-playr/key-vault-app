@@ -1325,3 +1325,29 @@ main {
 .applications-layout .application-link-filters button:hover { background: #ffffff26; }
 .applications-layout .application-link-filters button[aria-pressed="true"] { background: white; color: #196580; border-color: white; }
 .applications-layout .application-link-filters button:focus-visible { outline-color: white; }
+
+.runtime-configuration-editor {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  gap: 1rem;
+}
+.runtime-configuration-editor fieldset {
+  border: 1px solid var(--line, #d7dce3);
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 0.75rem 0;
+  min-width: 0;
+}
+.runtime-configuration-editor textarea {
+  width: 100%;
+  font-family: var(--font-mono), monospace;
+}
+.runtime-configuration-editor pre {
+  max-height: 24rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

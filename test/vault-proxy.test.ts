@@ -262,3 +262,102 @@ test("connection validation forwards the complete suffixed token and propagates 
   assert.equal(response.status, 401);
   assert.ok(!(await response.text()).includes(invalid));
 });
+
+test("runtime configuration routes bound tenant token map and never forward it elsewhere", async () => {
+  const map = JSON.stringify({ "club-a": token });
+  let forwarded: Headers | undefined;
+  const fetcher: typeof fetch = async (_input, init) => {
+    forwarded = new Headers(init?.headers);
+    return Response.json({ revision: 1, configuration: {} });
+  };
+  const response = await forwardVault(
+    request("PUT", "{}", { "x-vault-tenant-tokens": map }),
+    ["local", "runtime-configuration"],
+    { ...options, fetch: fetcher },
+  );
+  assert.equal(response.status, 200);
+  assert.equal(forwarded?.get("x-vault-tenant-tokens"), map);
+  for (const value of [
+    map,
+    "x".repeat(12289),
+    JSON.stringify({ "../bad": token }),
+    JSON.stringify({ "club-a": "short" }),
+  ]) {
+    assert.equal(
+      (
+        await forwardVault(
+          request("PUT", "{}", { "x-vault-tenant-tokens": value }),
+          ["secrets", "demo"],
+          options,
+        )
+      ).status,
+      400,
+    );
+  }
+  assert.equal(
+    (
+      await forwardVault(
+        request("PUT", "{}", { "x-vault-tenant-tokens": "x".repeat(12289) }),
+        ["local", "runtime-configuration"],
+        options,
+      )
+    ).status,
+    400,
+  );
+});
+
+test("runtime access administration admits only explicit app tenant GET/PUT with bounded grants", async () => {
+  const map = JSON.stringify({ "club-a": token });
+  for (const method of ["GET", "PUT"]) {
+    const response = await forwardVault(
+      request(
+        method,
+        method === "PUT" ? JSON.stringify({ allow: true }) : undefined,
+        { "x-vault-tenant-tokens": map },
+      ),
+      ["local", "runtime-access-control", "club-api", "tenants", "club-a"],
+      {
+        ...options,
+        fetch: async (_input, init) => {
+          assert.equal(
+            new Headers(init?.headers).get("x-vault-tenant-tokens"),
+            map,
+          );
+          return Response.json({
+            application: "club-api",
+            tenant: "club-a",
+            identityConfigured: true,
+            authorized: false,
+          });
+        },
+      },
+    );
+    assert.equal(response.status, 200);
+  }
+  for (const path of [
+    ["local", "runtime-access-control"],
+    ["local", "runtime-access-control", "club-api", "tenants"],
+    ["local", "runtime-access-control", "club-api", "tenants", "_shared"],
+    ["local", "runtime-access-control", "club-api", "tenants", "../bad"],
+  ])
+    assert.equal((await forwardVault(request(), path, options)).status, 400);
+});
+
+test("import preview may forward bounded tenant proofs only on its exact configuration route", async () => {
+  const map = JSON.stringify({ "club-a": token });
+  const response = await forwardVault(
+    request("POST", "{}", { "x-vault-tenant-tokens": map }),
+    ["local", "runtime-configuration", "import"],
+    {
+      ...options,
+      fetch: async (_input, init) => {
+        assert.equal(
+          new Headers(init?.headers).get("x-vault-tenant-tokens"),
+          map,
+        );
+        return Response.json({ configuration: {} });
+      },
+    },
+  );
+  assert.equal(response.status, 200);
+});

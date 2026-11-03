@@ -1,6 +1,6 @@
 {
   "name": "@kick-playr/key-vault-app",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "private": true,
   "type": "module",
   "engines": {
