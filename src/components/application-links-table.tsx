@@ -1,4 +1,5 @@
 'use client';
+import { secretValueFormatLabel, type SecretValueFormat } from '../lib/secret-value-format';
 import React, { useEffect, useRef, useState } from 'react';
 import type { InventoryRow } from '../lib/inventory';
 import type { ApplicationResource } from '../lib/applications';
@@ -11,6 +12,7 @@ export interface LinkUpdate {
   version?: string;
 }
 type Row = {
+  valueFormat?: SecretValueFormat;
   kind: 'keys' | 'secrets';
   name: string;
   purpose: string;
@@ -62,6 +64,7 @@ export function ApplicationLinksTable({
       name: item.name,
       purpose: item.purpose ?? item.tags?.purpose ?? `Unnamed ${item.kind}`,
       version: item.version,
+      valueFormat: item.valueFormat,
       canonical: item.tags?.envName,
       others: [],
     });
@@ -328,6 +331,10 @@ function ResourceRow({
       ...(draft.version !== 'latest' ? [draft.version] : []),
     ]),
   ];
+  const selectedVersion = draft.version === 'latest' ? versions?.at(-1)?.version ?? row.version : draft.version;
+  const selectedFormat = versions?.find(v => v.version === selectedVersion)?.valueFormat
+    ?? (selectedVersion === row.version ? row.valueFormat : undefined)
+    ?? (selectedVersion === row.linked?.version ? row.linked?.valueFormat : undefined);
   return (
     <tr className={draft.selected ? 'is-linked' : ''}>
       <td>
@@ -345,6 +352,7 @@ function ResourceRow({
           {row.kind === 'secrets' ? 'Secret' : 'Key handle'}
           {row.missing ? ' · Missing resource' : ''}
         </small>
+        {row.kind === 'secrets' && <small>Format: {secretValueFormatLabel(selectedFormat)}</small>}
         {row.others.length > 0 && (
           <small>Also used by: {row.others.join(', ')}</small>
         )}

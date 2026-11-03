@@ -1,3 +1,4 @@
+import { parseSecretValueFormat, type SecretValueFormat } from './secret-value-format';
 export type InventoryEndpoint = "keys" | "secrets" | "local/inventory";
 export interface VaultScope {
   environment: string;
@@ -14,6 +15,7 @@ export interface InventoryRow {
   updated?: number;
   purpose?: string;
   tags?: Record<string, string>;
+  valueFormat?: SecretValueFormat;
   contentType?: string;
 }
 const common = ["maxresults", "$skiptoken"];
@@ -220,6 +222,7 @@ export function parseInventory(
         : {}),
       ...(purpose !== undefined ? { purpose } : {}),
       ...(tags ? { tags } : {}),
+      ...(kind === "secret" && item.valueFormat !== undefined ? {valueFormat: parseSecretValueFormat(item.valueFormat)} : {}),
       ...(typeof item.contentType === "string"
         ? { contentType: item.contentType }
         : {}),

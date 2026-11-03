@@ -81,3 +81,9 @@ test("history preserves creation order and projects only metadata", () => {
     ),
   );
 });
+
+test('secret history retains valid format metadata and rejects unknown formats',()=>{
+  const payload=(valueFormat:string)=>({value:[{id:id+'v1',attributes:{enabled:true},valueFormat,value:'never-retain'}]});
+  assert.equal(parseVersions(payload('hex64'),'secrets',scope,'demo')[0]?.valueFormat,'hex64');
+  assert.throws(()=>parseVersions(payload('invalid'),'secrets',scope,'demo'));
+});

@@ -151,3 +151,11 @@ test("matches API edge cases for metadata clearing, manifest bounds and canonica
     }),
   );
 });
+
+test('secret format is sent explicitly for values and metadata without conversion',()=>{
+  const value='aB01'.repeat(16);
+  assert.equal(buildOperation('secret-set',{name:'sample',value,valueFormat:'hex64'}).body?.valueFormat,'hex64');
+  assert.equal(buildOperation('secret-set',{name:'sample',value,valueFormat:'hex64'}).body?.value,value);
+  assert.deepEqual(buildOperation('secret-update',{name:'sample',version:'v1',valueFormat:'base64'}).body,{valueFormat:'base64'});
+  assert.throws(()=>buildOperation('secret-set',{name:'sample',value,valueFormat:'invalid'}));
+});

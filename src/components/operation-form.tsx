@@ -54,6 +54,10 @@ export function OperationForm({
           new FormData(form).entries(),
         ) as Fields;
         try {
+          if (values.valueFormat === "") {
+            if (id === "secret-set") throw Error("Choose a value format.");
+            delete values.valueFormat;
+          }
           buildOperation(id, values);
           setValidation("");
         } catch (error) {
@@ -140,6 +144,15 @@ export function OperationForm({
             </div>
             {operation.section === "secrets" && (
               <>
+                <label className="field">
+                  Value format
+                  <select name="valueFormat" required={create} defaultValue="">
+                    <option value="">{create ? 'Choose format…' : 'Keep unchanged'}</option>
+                    <option value="text">Plain text</option>
+                    <option value="base64">Base64</option>
+                    <option value="hex64">Hex (64 characters)</option>
+                  </select>
+                </label>
                 {field("contentType", "Content type", {
                   placeholder: "e.g. text/plain",
                 })}

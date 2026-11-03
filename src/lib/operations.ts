@@ -1,3 +1,4 @@
+import { parseSecretValueFormat } from './secret-value-format';
 export type Section = "keys" | "secrets" | "advanced";
 export type Fields = Record<string, string>;
 export interface Operation {
@@ -250,6 +251,7 @@ export function buildOperation(
     body.key_ops = keyOps;
   }
   if (op.section === "secrets") {
+    if (fields.valueFormat !== undefined) body.valueFormat = parseSecretValueFormat(fields.valueFormat);
     if ((fields.contentType?.length ?? 0) > 255)
       throw Error("Content type must be at most 255 characters.");
     if (fields.clearContentType === "on") body.contentType = "";

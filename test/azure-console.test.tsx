@@ -126,10 +126,12 @@ test("creates a secret with masked input, refreshes metadata and discards echoed
     screen.getByLabelText("Secret value").getAttribute("type"),
     "password",
   );
+  fireEvent.change(screen.getByLabelText("Value format"), {target:{value:"text"}});
   fireEvent.click(screen.getByRole("button", { name: "Create secret" }));
   await screen.findByText(/Saved to vault/);
   assert.deepEqual(calls.find((c) => c.method === "PUT")?.body, {
     value: "synthetic-secret",
+    valueFormat: "text",
     attributes: { enabled: true },
   });
   assert.equal(document.body.textContent?.includes("echo-sensitive"), false);
@@ -167,6 +169,7 @@ test("metadata editing uses exact PATCH and no secret read; new value creates a 
   fireEvent.change(screen.getByLabelText("Secret value"), {
     target: { value: "new-synthetic" },
   });
+  fireEvent.change(screen.getByLabelText("Value format"), {target:{value:"text"}});
   fireEvent.click(screen.getByRole("button", { name: "Create new version" }));
   await screen.findByText(/Saved to vault/);
   assert.equal(calls.filter((c) => c.method === "PUT").length, 1);
@@ -232,6 +235,7 @@ test("ambiguous write keeps form and never automatically retries", async () => {
   fireEvent.change(screen.getByLabelText("Secret value"), {
     target: { value: "test" },
   });
+  fireEvent.change(screen.getByLabelText("Value format"), {target:{value:"text"}});
   fireEvent.click(screen.getByRole("button", { name: "Create secret" }));
   await screen.findByText(/outcome is unknown/);
   assert.equal(calls.filter((c) => c.method === "PUT").length, 1);
@@ -262,6 +266,7 @@ test("imports a file only on explicit submit and preserves BOM and newlines", as
   });
   await screen.findByText("File ready. Value remains masked.");
   assert.equal(calls.filter((c) => c.method === "PUT").length, 0);
+  fireEvent.change(screen.getByLabelText("Value format"), {target:{value:"text"}});
   fireEvent.click(screen.getByRole("button", { name: "Create secret" }));
   await screen.findByText(/Saved to vault/);
   assert.equal(
@@ -378,6 +383,7 @@ test("a pending write disables fields and prevents duplicate submission", async 
   fireEvent.change(screen.getByLabelText("Secret value"), {
     target: { value: "original" },
   });
+  fireEvent.change(screen.getByLabelText("Value format"), {target:{value:"text"}});
   fireEvent.click(screen.getByRole("button", { name: "Create secret" }));
   await waitFor(() => assert.ok(resolve));
   assert.equal(
@@ -684,4 +690,15 @@ test("older API missing version count uses metadata history without reading secr
     calls.some((c) => c.url.endsWith("/demo/v2")),
     false,
   );
+});
+
+test('secret create requires an explicit format and submits hex text unchanged',async()=>{
+  setup(async(url,init)=>init?.method==='PUT'?Response.json({id:id+'v3',attributes:{enabled:true},valueFormat:'hex64'}):Response.json(url.endsWith('/versions')?versions:{value:[]}));
+  await secrets();fireEvent.click(screen.getByRole('button',{name:'Generate/Import'}));
+  const format=screen.getByLabelText('Value format') as HTMLSelectElement;
+  assert.equal(format.value,'');assert.equal(format.required,true);
+  fireEvent.change(screen.getByLabelText('Name'),{target:{value:'demo'}});
+  const value='aB01'.repeat(16);fireEvent.change(screen.getByLabelText('Secret value'),{target:{value}});
+  fireEvent.change(format,{target:{value:'hex64'}});fireEvent.click(screen.getByRole('button',{name:'Create secret'}));
+  await screen.findByText(/Saved to vault/);assert.equal(calls.find(c=>c.method==='PUT')?.body?.valueFormat,'hex64');assert.equal(calls.find(c=>c.method==='PUT')?.body?.value,value);
 });

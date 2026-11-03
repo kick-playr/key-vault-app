@@ -93,6 +93,7 @@ test('creates and edits apps, links an existing secret, shows canonical sharing 
             versionId:
               'http://127.0.0.1:4000/namespaces/development/_shared/secrets/database/' +
               'a'.repeat(32),
+            valueFormat: 'text',
             tags: { purpose: 'database', envName: 'DATABASE_URL' },
             attributes: { enabled: true },
           },
@@ -153,6 +154,7 @@ test('creates and edits apps, links an existing secret, shows canonical sharing 
   fireEvent.click(screen.getByRole('button', { name: 'Create application' }));
   await screen.findByRole('button', { name: 'Club API' });
   fireEvent.click(screen.getByRole('button', { name: 'Club API' }));
+  await screen.findByText('Format: Plain text');
   fireEvent.click(await screen.findByLabelText('Select database'));
   assert.equal(
     (screen.getByLabelText('ENV variable for database') as HTMLInputElement)

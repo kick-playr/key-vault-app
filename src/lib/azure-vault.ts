@@ -1,3 +1,4 @@
+import { parseSecretValueFormat, type SecretValueFormat } from './secret-value-format';
 import type { VaultScope } from "./inventory";
 export interface VaultVersion {
   version: string;
@@ -9,6 +10,7 @@ export interface VaultVersion {
     exp?: number;
   };
   tags?: Record<string, string>;
+  valueFormat?: SecretValueFormat;
   contentType?: string;
 }
 export function decodeSecretFile(bytes: Uint8Array): string {
@@ -104,6 +106,7 @@ export function parseVersions(
       version,
       attributes,
       ...(tags ? { tags } : {}),
+      ...(kind === "secrets" && row.valueFormat !== undefined ? { valueFormat: parseSecretValueFormat(row.valueFormat) } : {}),
       ...(kind === "secrets" && row.contentType !== undefined
         ? { contentType: row.contentType as string }
         : {}),

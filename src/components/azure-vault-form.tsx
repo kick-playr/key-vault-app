@@ -91,6 +91,9 @@ export function AzureVaultForm({
           throw Error("Existing dates cannot be cleared by this API.");
       }
       if (!key) {
+        const format = String(data.get("valueFormat") ?? "");
+        if (!format && !editing) throw Error("Choose a value format.");
+        if (format) fields.valueFormat = format;
         fields.contentType = String(data.get("contentType") ?? "");
         if (editing && !fields.contentType) fields.clearContentType = "on";
       } else {
@@ -298,6 +301,16 @@ export function AzureVaultForm({
             <option value="false">No</option>
           </select>
         </label>
+        {!key && <label className="field">
+          Value format
+          <select name="valueFormat" aria-label="Value format" required={!editing} defaultValue={editing ? selected?.valueFormat ?? '' : ''}>
+            <option value="">{editing ? 'Keep existing format' : 'Choose format…'}</option>
+            <option value="text">Plain text</option>
+            <option value="base64">Base64</option>
+            <option value="hex64">Hex (64 characters)</option>
+          </select>
+          <small>Describes the stored text. The value is never converted.</small>
+        </label>}
         <details open={editing} className="azure-properties">
           <summary>Properties and tags (optional)</summary>
           {!key && (

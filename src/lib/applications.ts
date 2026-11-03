@@ -1,4 +1,6 @@
+import { parseSecretValueFormat, type SecretValueFormat } from './secret-value-format';
 export interface ApplicationResource {
+  valueFormat?: SecretValueFormat;
   kind: 'keys' | 'secrets';
   name: string;
   envName: string;
@@ -77,6 +79,7 @@ export function parseApplications(
       // Pick metadata fields explicitly; arbitrary response fields never reach UI state.
       return {
         kind: r.kind as 'keys' | 'secrets',
+        ...(r.kind === 'secrets' && r.valueFormat !== undefined ? {valueFormat:parseSecretValueFormat(r.valueFormat)} : {}),
         name: str(r.name, 127),
         envName: str(r.envName, 128),
         policy: str(r.policy, 32),

@@ -1,3 +1,4 @@
+import { secretValueFormatLabel } from '../lib/secret-value-format';
 import { SecretVersionValue } from "./secret-version-value";
 import { DiscardDialog } from "./discard-dialog";
 import React, { useEffect, useRef, useState } from "react";
@@ -555,6 +556,7 @@ export function AzureVaultPanel({
                     <dd>{date(selected.attributes.nbf)}</dd>
                     <dt>Expiration</dt>
                     <dd>{date(selected.attributes.exp)}</dd>
+                    {kind === "secrets" && <><dt>Value format</dt><dd>{secretValueFormatLabel(selected.valueFormat)}</dd></>}
                     {selected.contentType !== undefined && (
                       <>
                         <dt>Content type</dt>

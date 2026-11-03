@@ -1,4 +1,5 @@
 "use client";
+import { secretValueFormatLabel } from '../lib/secret-value-format';
 import React, { useEffect, useRef, useState } from "react";
 import {
   ArrowPathIcon,
@@ -340,6 +341,7 @@ export function InventoryPanel({
                   </td>
                   <td>
                     {row.purpose && <span>Purpose: {row.purpose}</span>}
+                    {row.kind === "secret" && <small>Format: {secretValueFormatLabel(row.valueFormat)}</small>}
                     {row.contentType && <small>{row.contentType}</small>}
                     {row.tags && (
                       <details>
