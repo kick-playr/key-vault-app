@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "next dev --hostname localhost -p 4001",
+    "start:dev": "npm run dev",
     "build": "next build",
     "start": "next start --hostname localhost -p 4001",
     "typecheck": "tsc --noEmit",
