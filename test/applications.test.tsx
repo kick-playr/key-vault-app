@@ -1105,3 +1105,18 @@ test('new application fields open on demand and cancel closes without writing',a
   fireEvent.click(screen.getByRole('button',{name:'Cancel'}));
   assert.equal(screen.queryByLabelText('Application slug'),null);assert.deepEqual(writes,[]);
 });
+
+test('link header filters used and unused resources and toggles back to all',async()=>{
+  const {ApplicationLinksTable}=await import('../src/components/application-links-table');
+  const linked={kind:'secrets' as const,name:'used',envName:'USED_SECRET',policy:'latest',version:'a'.repeat(32),enabled:true,missing:false,tags:{purpose:'Used secret'},applications:['app']};
+  let saved=0;
+  render(<ApplicationLinksTable inventory={['used','unused'].map(name=>({kind:'secret' as const,name,purpose:name==='used'?'Used secret':'Unused secret',version:'a'.repeat(32),enabled:true}))} resources={[linked]} canonicalResources={[linked]} disabled={false} onDirty={()=>{}} onSave={async()=>{saved++;return true;}} loadVersions={async()=>[]}/>);
+  const used=screen.getByRole('button',{name:'Show used resources'}),unused=screen.getByRole('button',{name:'Show unused resources'});
+  assert.ok(screen.getByLabelText('Select Used secret'));assert.ok(screen.getByLabelText('Select Unused secret'));
+  fireEvent.click(used);assert.equal(used.getAttribute('aria-pressed'),'true');assert.equal(screen.queryByLabelText('Select Unused secret'),null);
+  fireEvent.click(unused);assert.equal(used.getAttribute('aria-pressed'),'false');assert.equal(screen.queryByLabelText('Select Used secret'),null);assert.ok(screen.getByLabelText('Select Unused secret'));
+  fireEvent.click(unused);assert.equal(unused.getAttribute('aria-pressed'),'false');assert.ok(screen.getByLabelText('Select Used secret'));assert.equal(saved,0);
+  fireEvent.click(used);fireEvent.click(screen.getByLabelText('Select Used secret'));
+  assert.equal(screen.queryByLabelText('Select Used secret'),null);
+  fireEvent.click(screen.getByRole('button',{name:'Save links'}));await waitFor(()=>assert.equal(saved,1));
+});

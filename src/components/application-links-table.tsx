@@ -52,6 +52,7 @@ export function ApplicationLinksTable({
   ) => Promise<VaultVersion[]>;
 }) {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [linkFilter, setLinkFilter] = useState<'all' | 'linked' | 'unlinked'>('all');
   const [keySearch, setKeySearch] = useState(''),
     [envSearch, setEnvSearch] = useState(''),
     [page, setPage] = useState(0),
@@ -101,6 +102,8 @@ export function ApplicationLinksTable({
   );
   const filtered = rows.filter(
     (row) =>
+      (linkFilter === 'all' ||
+        (drafts[`${row.kind}/${row.name}`]?.selected ?? !!row.linked) === (linkFilter === 'linked')) &&
       `${row.purpose} ${row.name}`
         .toLowerCase()
         .includes(keySearch.trim().toLowerCase()) &&
@@ -176,7 +179,23 @@ export function ApplicationLinksTable({
         >
           <thead>
             <tr>
-              <th scope="col">Link</th>
+              <th scope="col">
+                Link
+                <div className="application-link-filters" role="group" aria-label="Filter resource links">
+                  {(['linked', 'unlinked'] as const).map(filter => (
+                    <button key={filter} type="button"
+                      aria-label={filter === 'linked' ? 'Show used resources' : 'Show unused resources'}
+                      title={filter === 'linked' ? 'Used by this application · click again to show all' : 'Unused by this application · click again to show all'}
+                      aria-pressed={linkFilter === filter}
+                      onClick={() => { setLinkFilter(linkFilter === filter ? 'all' : filter); setPage(0); }}>
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <rect x="4" y="4" width="16" height="16" rx="2" />
+                        {filter === 'linked' && <path d="m7 12 3 3 7-7" />}
+                      </svg>
+                    </button>
+                  ))}
+                </div>
+              </th>
               <th scope="col">
                 Secret / key purpose
                 <input

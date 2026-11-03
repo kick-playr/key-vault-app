@@ -1319,3 +1319,9 @@ main {
 .applications-layout .application-create-form { max-width: 760px; padding-top: 24px; border-top: 1px solid #e2e8f0; }
 .application-create-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 @media(max-width: 640px) { .applications-catalog-heading { align-items: stretch; flex-direction: column; } }
+
+.application-link-filters { display: flex; gap: 6px; margin-top: 8px; }
+.applications-layout .application-link-filters button { display: inline-flex; align-items: center; justify-content: center; padding: 4px; min-width: 32px; min-height: 32px; border: 1px solid #ffffff80; background: transparent; color: white; }
+.applications-layout .application-link-filters button:hover { background: #ffffff26; }
+.applications-layout .application-link-filters button[aria-pressed="true"] { background: white; color: #196580; border-color: white; }
+.applications-layout .application-link-filters button:focus-visible { outline-color: white; }
