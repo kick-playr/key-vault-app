@@ -1264,7 +1264,7 @@ main {
   font-size: 12px;
 }
 
-/* Application modelling: readable resource cards on both desktop and mobile. */
+/* Application modelling and resource linking. */
 .applications-layout { display: grid; gap: 20px; }
 .applications-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .applications-layout h2, .applications-layout h3 { margin: 0 0 12px; }
@@ -1279,17 +1279,24 @@ main {
 .applications-layout .secondary-button { background: white; border: 1px solid #cbd5e1; color: #172033; }
 .application-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .application-list .selected { border-color: #2563eb; background: #eff6ff; }
-.application-resources { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; }
-.application-resource { border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; min-width: 0; }
-.application-resource h4 { margin: 0 0 16px; overflow-wrap: anywhere; }
-.application-resource h4 small { display: block; margin-top: 5px; color: #64748b; font-weight: 400; }
-.application-resource dl { display: grid; gap: 5px; }
-.application-resource dt { font-size: .8rem; font-weight: 600; color: #64748b; }
-.application-resource dd { margin: 0 0 10px; overflow-wrap: anywhere; }
-.application-resource code { overflow-wrap: anywhere; }
-.application-resource details { margin: 14px 0; }
-.application-resource button { margin: 4px 8px 0 0; }
 .application-status { padding: 12px 16px; border-left: 3px solid #d97706; background: #fffbeb; }
 .applications-layout .error-message { padding: 14px; color: #991b1b; background: #fef2f2; border-radius: 8px; }
 .applications-layout :focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
-@media(max-width: 640px) { .applications-toolbar { align-items: stretch; flex-direction: column; } .application-resources { grid-template-columns: 1fr; } }
+@media(max-width: 640px) { .applications-toolbar { align-items: stretch; flex-direction: column; } }
+
+.application-links-scroll { overflow-x: auto; margin: 18px 0; }
+.application-links-table { width: 100%; border-collapse: collapse; text-align: left; min-width: 820px; }
+.application-links-table thead { background: #196580; color: white; }
+.application-links-table th, .application-links-table td { padding: 14px 16px; border-bottom: 1px solid #d5dee5; vertical-align: top; }
+.application-links-table tbody tr { background: #f5f7f9; }
+.application-links-table tbody tr:nth-child(even) { background: #edf1f4; }
+.application-links-table tbody tr.is-linked { background: #e4eef5; }
+.application-links-table tbody th { min-width: 200px; font-weight: 400; }
+.application-links-table small { display: block; color: #526174; font-size: .78rem; margin-top: 6px; }
+.application-links-table input[type="checkbox"] { width: 20px; height: 20px; accent-color: #196580; margin: 8px 0; }
+.application-resource-id { display: block; width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #526174; font-size: .8rem; }
+.application-links-table select { min-width: 160px; max-width: 235px; }
+.application-links-table input:not([type="checkbox"]) { min-width: 210px; }
+
+.applications-layout .application-links-form { max-width: none; min-width: 0; }
+.application-detail { min-width: 0; }

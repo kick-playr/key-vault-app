@@ -101,10 +101,10 @@ test('creates and edits apps, links an existing secret, shows canonical sharing 
     if (method !== 'GET') {
       assert.equal(body.expectedRevision, revision);
       revision++;
-      if (path.includes('/resources/')) {
+      if (path.endsWith('/resources')) {
         const app = apps[0];
         app.resources =
-          method === 'DELETE'
+          body.updates[0].selected === false
             ? []
             : [
                 {
@@ -153,23 +153,24 @@ test('creates and edits apps, links an existing secret, shows canonical sharing 
   fireEvent.click(screen.getByRole('button', { name: 'Create application' }));
   await screen.findByRole('button', { name: 'Club API' });
   fireEvent.click(screen.getByRole('button', { name: 'Club API' }));
-  await screen.findByLabelText('Existing resource');
-  fireEvent.change(screen.getByLabelText('Existing resource'), {
-    target: { value: 'secrets/database' },
-  });
+  fireEvent.click(await screen.findByLabelText('Select database'));
   assert.equal(
-    (screen.getByLabelText('ENV variable name') as HTMLInputElement).value,
+    (screen.getByLabelText('ENV variable for database') as HTMLInputElement)
+      .value,
     'DATABASE_URL',
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Link resource' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save links' }));
   await screen.findByText('Also used by: explorer-api');
   assert.ok(
     screen.getByText(
       'Saved model. Check consumer reports for runtime adoption.',
     ),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Unlink database' }));
-  await waitFor(() => assert.ok(calls.some((c) => c.method === 'DELETE')));
+  fireEvent.click(screen.getByLabelText('Select database'));
+  fireEvent.click(screen.getByRole('button', { name: 'Save links' }));
+  await waitFor(() =>
+    assert.ok(calls.some((c) => c.body?.updates?.[0]?.selected === false)),
+  );
   assert.equal(
     calls.some(
       (c) => /\/secrets\/database$/.test(c.path) && c.method === 'GET',
@@ -296,11 +297,26 @@ test('reload replaces stale selected app drafts before using the new revision', 
   fireEvent.click(screen.getByRole('button', { name: 'Save application' }));
   await waitFor(() => assert.equal(saved?.displayName, 'Other operator'));
 });
+function draftInventory(tenant = '_shared') {
+  return {
+    value: [
+      {
+        kind: 'secret',
+        name: 'database',
+        version: 'a'.repeat(32),
+        id: `http://127.0.0.1:4000/namespaces/development/${tenant}/secrets/database`,
+        versionId: `http://127.0.0.1:4000/namespaces/development/${tenant}/secrets/database/${'a'.repeat(32)}`,
+        tags: { purpose: 'database' },
+        attributes: { enabled: true },
+      },
+    ],
+  };
+}
 test('saving details retains an unrelated unsaved link draft and its discard guard', async () => {
   const dirty: boolean[] = [];
   globalThis.fetch = async (input) =>
     String(input).includes('inventory')
-      ? Response.json({ value: [] })
+      ? Response.json(draftInventory())
       : Response.json({
           revision: 1,
           generation: 1,
@@ -324,7 +340,8 @@ test('saving details retains an unrelated unsaved link draft and its discard gua
     />,
   );
   fireEvent.click(await screen.findByRole('button', { name: 'Club' }));
-  fireEvent.change(screen.getByLabelText('ENV variable name'), {
+  fireEvent.click(screen.getByLabelText('Select database'));
+  fireEvent.change(screen.getByLabelText('ENV variable for database'), {
     target: { value: 'UNSAVED' },
   });
   fireEvent.change(screen.getByLabelText('Description'), {
@@ -407,17 +424,15 @@ test('tenant link submits separate scoped catalog credentials and clears the inp
     target: { value: 'club-api' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Model tenant links' }));
-  fireEvent.change(screen.getByLabelText('Existing resource'), {
-    target: { value: 'secrets/local' },
-  });
-  fireEvent.change(screen.getByLabelText('ENV variable name'), {
+  fireEvent.click(screen.getByLabelText('Select Unnamed secret'));
+  fireEvent.change(screen.getByLabelText('ENV variable for Unnamed secret'), {
     target: { value: 'LOCAL_KEY' },
   });
   fireEvent.change(
     screen.getByLabelText('Application catalog token (_shared)'),
     { target: { value: 'separate-catalog-token-aaaaaaaaaaaaaaaa' } },
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Link resource' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save links' }));
   await screen.findByText(
     'Saved model. Check consumer reports for runtime adoption.',
   );
@@ -475,6 +490,34 @@ test('proxy forwards catalog credentials only on an exact application link route
     upstreamHeaders?.get('x-vault-catalog-token'),
     headers['x-vault-catalog-token'],
   );
+  const batchPath = link.slice(0, 4);
+  const batch = await forwardVault(
+    new Request('http://localhost:4001/api/vault/' + batchPath.join('/'), {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        expectedRevision: 0,
+        updates: [
+          {
+            kind: 'secrets',
+            name: 'local',
+            selected: true,
+            envName: 'LOCAL_KEY',
+            version: 'latest',
+          },
+        ],
+      }),
+    }),
+    batchPath,
+    options,
+  );
+  assert.equal(batch.status, 200);
+  assert.equal(
+    upstreamHeaders?.get('x-vault-catalog-token'),
+    headers['x-vault-catalog-token'],
+  );
+  assert.equal(supportedRoute('GET', batchPath), false);
+  assert.equal(supportedRoute('DELETE', batchPath), false);
   const bad = await forwardVault(
     new Request('http://localhost:4001/api/vault/local/applications', {
       headers,
@@ -487,7 +530,7 @@ test('proxy forwards catalog credentials only on an exact application link route
 test('tenant application name navigation guards an unsaved resource mapping', async () => {
   globalThis.fetch = async (input) =>
     String(input).includes('inventory')
-      ? Response.json({ value: [] })
+      ? Response.json(draftInventory('club'))
       : Response.json({
           revision: 0,
           generation: 0,
@@ -501,7 +544,8 @@ test('tenant application name navigation guards an unsaved resource mapping', as
     target: { value: 'club-api' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Model tenant links' }));
-  fireEvent.change(screen.getByLabelText('ENV variable name'), {
+  fireEvent.click(screen.getByLabelText('Select database'));
+  fireEvent.change(screen.getByLabelText('ENV variable for database'), {
     target: { value: 'UNSAVED' },
   });
   fireEvent.change(screen.getByLabelText('Existing application name'), {
@@ -510,7 +554,8 @@ test('tenant application name navigation guards an unsaved resource mapping', as
   fireEvent.click(screen.getByRole('button', { name: 'Model tenant links' }));
   await screen.findByRole('alertdialog');
   assert.equal(
-    (screen.getByLabelText('ENV variable name') as HTMLInputElement).value,
+    (screen.getByLabelText('ENV variable for database') as HTMLInputElement)
+      .value,
     'UNSAVED',
   );
 });
@@ -564,17 +609,266 @@ test('shows reported runtime adoption without fetching values or accepting insta
     false,
   );
 });
-test('live configuration requires explicit UI activation after modelling links',async()=>{
-  let liveEnabled=false,activated=false;
-  globalThis.fetch=async(input,init)=>{
-    const path=String(input);if(path.endsWith('/status'))return Response.json({state:'not-connected',instances:[]});
-    if(path.includes('inventory'))return Response.json({value:[]});
-    if(path.endsWith('/activate')){activated=true;liveEnabled=true;assert.equal(init?.method,'PUT');}
-    return Response.json({revision:liveEnabled?2:1,generation:1,environment:'development',tenant:'_shared',applications:[{name:'app',displayName:'App',description:'',supported:true,liveEnabled,resources:[{kind:'secrets',name:'database',envName:'DATABASE_URL',policy:'latest',version:'a'.repeat(32),enabled:true,missing:false,tags:{},applications:['app']}],runtimeStatus:'not-connected'}]});
+test('live configuration requires explicit UI activation after modelling links', async () => {
+  let liveEnabled = false,
+    activated = false;
+  globalThis.fetch = async (input, init) => {
+    const path = String(input);
+    if (path.endsWith('/status'))
+      return Response.json({ state: 'not-connected', instances: [] });
+    if (path.includes('inventory')) return Response.json({ value: [] });
+    if (path.endsWith('/activate')) {
+      activated = true;
+      liveEnabled = true;
+      assert.equal(init?.method, 'PUT');
+    }
+    return Response.json({
+      revision: liveEnabled ? 2 : 1,
+      generation: 1,
+      environment: 'development',
+      tenant: '_shared',
+      applications: [
+        {
+          name: 'app',
+          displayName: 'App',
+          description: '',
+          supported: true,
+          liveEnabled,
+          resources: [
+            {
+              kind: 'secrets',
+              name: 'database',
+              envName: 'DATABASE_URL',
+              policy: 'latest',
+              version: 'a'.repeat(32),
+              enabled: true,
+              missing: false,
+              tags: {},
+              applications: ['app'],
+            },
+          ],
+          runtimeStatus: 'not-connected',
+        },
+      ],
+    });
   };
-  render(<ApplicationsPanel connection={connection}/>);fireEvent.click(await screen.findByRole('button',{name:'App'}));
-  assert.equal(activated,false);fireEvent.click(screen.getByText('Use live configuration').closest('summary')!);
-  fireEvent.click(screen.getByRole('button',{name:'Activate live configuration'}));
-  await screen.findByText('Live configuration enabled. Check consumer reports for adoption.');assert.equal(activated,true);
-  assert.equal(supportedRoute('PUT',['local','applications','app','activate']),true);
+  render(<ApplicationsPanel connection={connection} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'App' }));
+  assert.equal(activated, false);
+  fireEvent.click(
+    screen.getByText('Use live configuration').closest('summary')!,
+  );
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Activate live configuration' }),
+  );
+  await screen.findByText(
+    'Live configuration enabled. Check consumer reports for adoption.',
+  );
+  assert.equal(activated, true);
+  assert.equal(
+    supportedRoute('PUT', ['local', 'applications', 'app', 'activate']),
+    true,
+  );
+});
+test('resource table shows purposes, stages checkbox/version/ENV edits and saves them together', async () => {
+  const { ApplicationLinksTable } =
+    await import('../src/components/application-links-table');
+  const saved: any[] = [];
+  const rows: any[] = [
+    {
+      kind: 'secret',
+      name: 'kv-123',
+      purpose: 'app-clerk-secret-key',
+      version: 'a'.repeat(32),
+      enabled: true,
+      tags: {},
+    },
+    {
+      kind: 'key',
+      name: 'kv-456',
+      purpose: 'tenant-wrapping-key',
+      version: 'b'.repeat(32),
+      enabled: true,
+      tags: { envName: 'TENANT_KEY' },
+    },
+  ];
+  render(
+    <ApplicationLinksTable
+      inventory={rows}
+      resources={[]}
+      canonicalResources={[]}
+      disabled={false}
+      onDirty={() => {}}
+      onSave={async (updates) => {
+        saved.push(updates);
+        return true;
+      }}
+      loadVersions={async () => [
+        { version: 'c'.repeat(32), attributes: { enabled: true } },
+      ]}
+    />,
+  );
+  assert.ok(screen.getByRole('table', { name: 'Application resource links' }));
+  fireEvent.click(screen.getByLabelText('Select app-clerk-secret-key'));
+  fireEvent.change(
+    screen.getByLabelText('ENV variable for app-clerk-secret-key'),
+    { target: { value: 'CLERK_SECRET_KEY' } },
+  );
+  fireEvent.focus(screen.getByLabelText('Version for app-clerk-secret-key'));
+  await screen.findByRole('option', { name: 'c'.repeat(32) });
+  fireEvent.change(screen.getByLabelText('Version for app-clerk-secret-key'), {
+    target: { value: 'c'.repeat(32) },
+  });
+  fireEvent.click(screen.getByLabelText('Select tenant-wrapping-key'));
+  assert.equal(
+    (
+      screen.getByLabelText(
+        'ENV variable for tenant-wrapping-key',
+      ) as HTMLInputElement
+    ).readOnly,
+    true,
+  );
+  assert.equal(saved.length, 0);
+  fireEvent.click(screen.getByRole('button', { name: 'Save links' }));
+  await waitFor(() => assert.equal(saved.length, 1));
+  assert.deepEqual(saved[0], [
+    {
+      kind: 'secrets',
+      name: 'kv-123',
+      selected: true,
+      envName: 'CLERK_SECRET_KEY',
+      version: 'c'.repeat(32),
+    },
+    {
+      kind: 'keys',
+      name: 'kv-456',
+      selected: true,
+      envName: 'TENANT_KEY',
+      version: 'latest',
+    },
+  ]);
+});
+test('failed table saves preserve drafts; unchecked new rows become clean and old links stay checked', async () => {
+  const { ApplicationLinksTable } =
+    await import('../src/components/application-links-table');
+  const dirty: boolean[] = [],
+    saved: any[] = [];
+  const linked: any = {
+    kind: 'secrets',
+    name: 'outside-page',
+    envName: 'EXISTING_KEY',
+    policy: 'latest',
+    version: 'a'.repeat(32),
+    enabled: true,
+    missing: true,
+    tags: { purpose: 'existing-purpose' },
+    applications: ['club-api'],
+  };
+  render(
+    <ApplicationLinksTable
+      application="club-api"
+      inventory={[
+        {
+          kind: 'secret',
+          name: 'new-item',
+          purpose: 'new-purpose',
+          version: 'b'.repeat(32),
+          enabled: true,
+        },
+      ]}
+      resources={[linked]}
+      canonicalResources={[linked]}
+      disabled={false}
+      onDirty={(v) => dirty.push(v)}
+      onSave={async (updates) => {
+        saved.push(updates);
+        return undefined;
+      }}
+      loadVersions={async () => []}
+    />,
+  );
+  assert.equal(
+    (screen.getByLabelText('Select existing-purpose') as HTMLInputElement)
+      .checked,
+    true,
+  );
+  fireEvent.click(screen.getByLabelText('Select new-purpose'));
+  fireEvent.change(screen.getByLabelText('ENV variable for new-purpose'), {
+    target: { value: 'NEW_KEY' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Save links' }));
+  await waitFor(() => assert.equal(saved.length, 1));
+  assert.equal(
+    (screen.getByLabelText('ENV variable for new-purpose') as HTMLInputElement)
+      .value,
+    'NEW_KEY',
+  );
+  assert.equal(saved[0].length, 1);
+  fireEvent.click(screen.getByLabelText('Select new-purpose'));
+  assert.equal(dirty.at(-1), false);
+  fireEvent.click(screen.getByLabelText('Select existing-purpose'));
+  assert.equal(
+    (screen.getByLabelText('Select existing-purpose') as HTMLInputElement)
+      .checked,
+    false,
+  );
+  fireEvent.click(screen.getByLabelText('Select existing-purpose'));
+  assert.equal(
+    (screen.getByLabelText('Select existing-purpose') as HTMLInputElement)
+      .checked,
+    true,
+  );
+  fireEvent.click(screen.getByLabelText('Select existing-purpose'));
+  fireEvent.click(screen.getByRole('button', { name: 'Save links' }));
+  await waitFor(() => assert.equal(saved.length, 2));
+  assert.deepEqual(saved[1], [
+    { kind: 'secrets', name: 'outside-page', selected: false },
+  ]);
+});
+test('discarding drafts by reselecting the same app resets the table and its dirty guard', async () => {
+  const dirty: boolean[] = [];
+  globalThis.fetch = async (input) =>
+    String(input).includes('inventory')
+      ? Response.json(draftInventory())
+      : Response.json({
+          revision: 0,
+          generation: 0,
+          environment: 'development',
+          tenant: '_shared',
+          applications: [
+            {
+              name: 'club-api',
+              displayName: 'Club',
+              description: '',
+              supported: true,
+              resources: [],
+              runtimeStatus: 'not-connected',
+            },
+          ],
+        });
+  render(
+    <ApplicationsPanel
+      connection={connection}
+      onDirty={(v) => dirty.push(v)}
+    />,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Club' }));
+  fireEvent.click(screen.getByLabelText('Select database'));
+  fireEvent.change(screen.getByLabelText('ENV variable for database'), {
+    target: { value: 'UNSAVED' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Club' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Discard changes' }),
+  );
+  assert.equal(
+    (screen.getByLabelText('Select database') as HTMLInputElement).checked,
+    false,
+  );
+  assert.equal(
+    (screen.getByLabelText('ENV variable for database') as HTMLInputElement)
+      .value,
+    '',
+  );
+  assert.equal(dirty.at(-1), false);
 });

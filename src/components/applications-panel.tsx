@@ -1,4 +1,6 @@
 'use client';
+import { ApplicationLinksTable } from './application-links-table';
+import { parseVersions } from '../lib/azure-vault';
 import { DiscardDialog } from './discard-dialog';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -6,7 +8,6 @@ import {
   type ReportedRuntimeStatus,
   parseApplications,
   type ApplicationsModel,
-  type ApplicationResource,
 } from '../lib/applications';
 import {
   parseInventory,
@@ -46,10 +47,7 @@ export function ApplicationsPanel({
   const [createLabel, setCreateLabel] = useState('');
   const [inventory, setInventory] = useState<InventoryRow[]>([]);
   const [next, setNext] = useState<string>();
-  const [resource, setResource] = useState('');
-  const [mapping, setMapping] = useState('');
-  const [policy, setPolicy] = useState('latest');
-  const [pin, setPin] = useState('');
+  const [tableEpoch, setTableEpoch] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -73,14 +71,6 @@ export function ApplicationsPanel({
     sequence = useRef(0);
   const app = model?.applications.find((a) => a.name === selected);
   const isShared = connection.tenant === '_shared';
-  const chosen = inventory.find(
-    (r) => `${r.kind === 'secret' ? 'secrets' : 'keys'}/${r.name}` === resource,
-  );
-  const canonical =
-    model?.applications
-      .flatMap((a) => a.resources)
-      .find((r) => `${r.kind}/${r.name}` === resource)?.envName ??
-    chosen?.tags?.envName;
   const headers = {
     'x-vault-token': connection.token,
     'x-vault-environment': connection.environment,
@@ -97,7 +87,7 @@ export function ApplicationsPanel({
       headers: {
         ...headers,
         ...(method === 'PUT' &&
-        path.includes('/resources/') &&
+        (path.includes('/resources/') || path.endsWith('/resources')) &&
         catalogToken.current?.value
           ? { 'x-vault-catalog-token': catalogToken.current.value }
           : {}),
@@ -142,16 +132,14 @@ export function ApplicationsPanel({
       setConflicted(false);
       setNotice('');
       markDirty(false);
+      setTableEpoch((v) => v + 1);
       const fresh = m.applications.find((a) => a.name === selected);
       setSelected(fresh?.name ?? '');
       setDisplayName(fresh?.displayName ?? '');
       setDescription(fresh?.description ?? '');
       setCreateName('');
       setCreateLabel('');
-      setResource('');
-      setMapping('');
-      setPolicy('latest');
-      setPin('');
+
       if (catalogToken.current) catalogToken.current.value = '';
     } catch (e) {
       if (current(id) && !c.signal.aborted)
@@ -220,7 +208,7 @@ export function ApplicationsPanel({
     path: string,
     fields: Record<string, unknown>,
     method = 'PUT',
-    area = path.includes('/resources/')
+    area = path.includes('/resources/') || path.endsWith('/resources')
       ? method === 'DELETE'
         ? 'unlink'
         : 'link'
@@ -245,12 +233,8 @@ export function ApplicationsPanel({
         setCreateName('');
         setCreateLabel('');
       }
-      if (area === 'link') {
-        setResource('');
-        setMapping('');
-        setPolicy('latest');
-        setPin('');
-      }
+
+      return true;
     } catch (e) {
       if (current(id) && !c.signal.aborted)
         setError(e instanceof Error ? e.message : 'Cannot save application.');
@@ -262,12 +246,10 @@ export function ApplicationsPanel({
   function select(name: string) {
     const a = model?.applications.find((x) => x.name === name);
     setSelected(name);
+    setTableEpoch((value) => value + 1);
     setDisplayName(a?.displayName ?? '');
     setDescription(a?.description ?? '');
-    setResource('');
-    setMapping('');
-    setPolicy('latest');
-    setPin('');
+
     markDirty(false);
   }
   async function more() {
@@ -290,24 +272,6 @@ export function ApplicationsPanel({
     } finally {
       if (current(id)) setBusy(false);
     }
-  }
-  function choose(value: string) {
-    setResource(value);
-    const r = inventory.find(
-      (r) => `${r.kind === 'secret' ? 'secrets' : 'keys'}/${r.name}` === value,
-    );
-    const linked = model?.applications
-      .flatMap((a) => a.resources)
-      .find((r) => `${r.kind}/${r.name}` === value);
-    setMapping(linked?.envName ?? r?.tags?.envName ?? '');
-    markDirty(true);
-  }
-  function editLink(r: ApplicationResource) {
-    setResource(`${r.kind}/${r.name}`);
-    setMapping(r.envName);
-    setPolicy(r.policy === 'latest' ? 'latest' : 'pin');
-    setPin(r.policy === 'latest' ? '' : r.policy);
-    markDirty(true);
   }
   return (
     <div className="applications-layout">
@@ -557,198 +521,112 @@ export function ApplicationsPanel({
                   </button>
                 </form>
               )}
-              {isShared && app && (app.liveEnabled ? <p>Live configuration enabled. Check consumer reports for adoption.</p> : <details><summary>Use live configuration</summary><p>This explicitly switches updated consumers from startup configuration to these UI links. Saving a model alone does not switch them. Older consumers need the updated adapter. This switch cannot be reversed here; encryption-key changes still require safe migration.</p><p>Save or reload any unsaved edits before activating.</p><button className="primary-button" disabled={busy||conflicted||!app.supported||!app.resources.length} onClick={()=>{if(dirty.current){setError('Save or reload unsaved edits before activating.');return;}void mutate('local/applications/'+encodeURIComponent(selected)+'/activate',{},'PUT','activation');}}>Activate live configuration</button></details>)}
-        <h3>Linked resources</h3>
-              {!app?.resources.length && (
-                <p>No resources linked in this namespace.</p>
-              )}
-              <div className="application-resources">
-                {app?.resources.map((r) => (
-                  <article
-                    className="application-resource"
-                    key={`${r.kind}/${r.name}`}
-                  >
-                    <h4>
-                      {r.name}{' '}
-                      <small>
-                        {r.kind === 'secrets' ? 'Secret' : 'Key handle'}
-                      </small>
-                    </h4>
-                    <dl>
-                      <dt>ENV variable</dt>
-                      <dd>
-                        <code>{r.envName}</code>
-                      </dd>
-                      <dt>Version</dt>
-                      <dd>
-                        {r.policy === 'latest' ? 'Latest' : 'Pinned'} ·{' '}
-                        <code>{r.version ?? 'Missing'}</code>
-                      </dd>
-                      <dt>Resource state</dt>
-                      <dd>
-                        {r.missing
-                          ? 'Missing resource — update cannot apply'
-                          : r.enabled
-                            ? 'Enabled'
-                            : 'Disabled — update cannot apply'}
-                      </dd>
-                    </dl>
-                    {r.applications.filter((a) => a !== selected).length >
-                      0 && (
-                      <p>
-                        Also used by:{' '}
-                        {r.applications
-                          .filter((a) => a !== selected)
-                          .join(', ')}
-                      </p>
-                    )}
-                    <details>
-                      <summary>Tags and application links</summary>
-                      <dl>
-                        {Object.entries(r.tags).map(([k, v]) => (
-                          <React.Fragment key={k}>
-                            <dt>{k}</dt>
-                            <dd>{v}</dd>
-                          </React.Fragment>
-                        ))}
-                      </dl>
-                      <p>Applications: {r.applications.join(', ')}</p>
-                    </details>
+              {isShared &&
+                app &&
+                (app.liveEnabled ? (
+                  <p>
+                    Live configuration enabled. Check consumer reports for
+                    adoption.
+                  </p>
+                ) : (
+                  <details>
+                    <summary>Use live configuration</summary>
+                    <p>
+                      This explicitly switches updated consumers from startup
+                      configuration to these UI links. Saving a model alone does
+                      not switch them. Older consumers need the updated adapter.
+                      This switch cannot be reversed here; encryption-key
+                      changes still require safe migration.
+                    </p>
+                    <p>Save or reload any unsaved edits before activating.</p>
                     <button
-                      className="secondary-button"
-                      disabled={busy || conflicted}
-                      onClick={() => guarded(() => editLink(r))}
-                    >
-                      Edit link {r.name}
-                    </button>
-                    <button
-                      className="text-button"
-                      disabled={busy || conflicted}
-                      onClick={() =>
-                        void mutate(
-                          `local/applications/${encodeURIComponent(selected)}/resources/${r.kind}/${encodeURIComponent(r.name)}`,
-                          {},
-                          'DELETE',
-                        )
+                      className="primary-button"
+                      disabled={
+                        busy ||
+                        conflicted ||
+                        !app.supported ||
+                        !app.resources.length
                       }
+                      onClick={() => {
+                        if (dirty.current) {
+                          setError(
+                            'Save or reload unsaved edits before activating.',
+                          );
+                          return;
+                        }
+                        void mutate(
+                          'local/applications/' +
+                            encodeURIComponent(selected) +
+                            '/activate',
+                          {},
+                          'PUT',
+                          'activation',
+                        );
+                      }}
                     >
-                      Unlink {r.name}
+                      Activate live configuration
                     </button>
-                  </article>
+                  </details>
                 ))}
-              </div>
-              <form
-                onChange={() => markDirty(true)}
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (resource)
-                    void mutate(
-                      `local/applications/${encodeURIComponent(selected)}/resources/${resource.split('/').map(encodeURIComponent).join('/')}`,
-                      {
-                        envName: mapping,
-                        version: policy === 'latest' ? 'latest' : pin,
-                      },
-                    );
-                }}
-              >
-                <h3>Link an existing resource</h3>
-                {!isShared && (
-                  <label>
-                    Application catalog token (_shared)
-                    <input
-                      ref={catalogToken}
-                      type="password"
-                      autoComplete="off"
-                      spellCheck={false}
-                      placeholder="Separate catalog list token, if needed"
-                    />
-                  </label>
-                )}
+              {!isShared && (
                 <label>
-                  Existing resource
-                  <select
-                    required
-                    value={resource}
-                    onChange={(e) => choose(e.target.value)}
-                  >
-                    <option value="">Choose a secret or key</option>
-                    {inventory.map((r) => (
-                      <option
-                        key={`${r.kind}/${r.name}`}
-                        value={`${r.kind === 'secret' ? 'secrets' : 'keys'}/${r.name}`}
-                      >
-                        {r.name} ({r.kind})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {next && (
-                  <button
-                    type="button"
-                    className="text-button"
-                    disabled={busy}
-                    onClick={() => void more()}
-                  >
-                    Load more resources
-                  </button>
-                )}
-                <label>
-                  ENV variable name
+                  Application catalog token (_shared)
                   <input
-                    value={mapping}
-                    onChange={(e) => setMapping(e.target.value)}
-                    readOnly={!!canonical}
-                    required
-                    pattern="[A-Z][A-Z0-9_]{0,127}"
-                    maxLength={128}
-                    placeholder="DATABASE_URL"
+                    ref={catalogToken}
+                    type="password"
+                    autoComplete="off"
+                    spellCheck={false}
+                    placeholder="Separate catalog list token, if needed"
                   />
                 </label>
-                {canonical && (
-                  <p>
-                    This resource uses the same ENV name in every application:{' '}
-                    <code>{canonical}</code>.
-                  </p>
+              )}
+              <ApplicationLinksTable
+                key={`${selected}/${tableEpoch}`}
+                application={selected}
+                inventory={inventory}
+                resources={app?.resources ?? []}
+                canonicalResources={model.applications.flatMap(
+                  (a) => a.resources,
                 )}
-                {chosen?.kind === 'key' && (
-                  <p>
-                    Keys remain non-exportable handles. Linking never exports
-                    private key material.
-                  </p>
-                )}
-                <label>
-                  Version policy
-                  <select
-                    value={policy}
-                    onChange={(e) => setPolicy(e.target.value)}
-                  >
-                    <option value="latest">Latest (default)</option>
-                    <option value="pin">Pin exact version (advanced)</option>
-                  </select>
-                </label>
-                {policy === 'pin' && (
-                  <label>
-                    Immutable version
-                    <input
-                      value={pin}
-                      onChange={(e) => setPin(e.target.value)}
-                      pattern="[a-f0-9]{32}"
-                      maxLength={32}
-                      required
-                    />
-                  </label>
-                )}
-                <p>
-                  Sharing reuses the existing resource. Unlinking does not
-                  delete it.
-                </p>
+                disabled={busy || conflicted}
+                onDirty={(value) => {
+                  if (value) markDirty(true, 'link');
+                  else {
+                    dirtyAreas.current.delete('link');
+                    dirty.current = dirtyAreas.current.size > 0;
+                    onDirty?.(dirty.current);
+                  }
+                }}
+                onSave={(updates) =>
+                  mutate(
+                    `local/applications/${encodeURIComponent(selected)}/resources`,
+                    { updates },
+                    'PUT',
+                    'link',
+                  )
+                }
+                loadVersions={async (kind, name, signal) =>
+                  parseVersions(
+                    await read(
+                      `${kind}/${encodeURIComponent(name)}/versions`,
+                      signal,
+                    ),
+                    kind,
+                    connection,
+                    name,
+                  )
+                }
+              />
+              {next && (
                 <button
-                  className="primary-button"
-                  disabled={busy || conflicted || !resource}
+                  type="button"
+                  className="text-button"
+                  disabled={busy}
+                  onClick={() => void more()}
                 >
-                  Link resource
+                  Load more resources
                 </button>
-              </form>
+              )}
             </section>
           )}
         </>

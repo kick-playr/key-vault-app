@@ -35,6 +35,7 @@ export function supportedRoute(method: string, path: string[]) {
     if (!/^[a-z][a-z0-9-]{0,63}$/.test(version ?? "")) return false;
     if (path.length === 3) return method === "PUT";
     if (path.length === 4 && action === "status") return method === "GET";
+    if (path.length === 4 && action === "resources") return method === "PUT";
     if (path.length === 4 && action === "activate") return method === "PUT";
     return path.length === 6 && action === "resources" &&
       ["keys", "secrets"].includes(path[4] ?? "") &&
@@ -125,7 +126,7 @@ export async function forwardVault(
   if (!/^Bearer [\x21-\x7e]{32,4096}$/.test(authorization))
     return failure(401, "VaultTokenRequired");
   const catalogToken = request.headers.get("x-vault-catalog-token");
-  const isApplicationLink = request.method === "PUT" && path.length === 6 && path[0] === "local" && path[1] === "applications" && path[3] === "resources";
+  const isApplicationLink = request.method === "PUT" && [4,6].includes(path.length) && path[0] === "local" && path[1] === "applications" && path[3] === "resources";
   if (catalogToken !== null && (!isApplicationLink || !/^[\x21-\x7e]{32,4096}$/.test(catalogToken))) return failure(400, "BadParameter");
   const environment = request.headers.get("x-vault-environment") ?? "";
   const tenant = request.headers.get("x-vault-tenant") ?? "";
