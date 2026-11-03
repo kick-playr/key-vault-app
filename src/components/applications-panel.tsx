@@ -46,7 +46,6 @@ export function ApplicationsPanel({
   const [createName, setCreateName] = useState('');
   const [createLabel, setCreateLabel] = useState('');
   const [inventory, setInventory] = useState<InventoryRow[]>([]);
-  const [next, setNext] = useState<string>();
   const [tableEpoch, setTableEpoch] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -123,12 +122,29 @@ export function ApplicationsPanel({
         read('local/applications', c.signal),
         read('local/inventory?maxresults=25', c.signal),
       ]);
-      const m = parseApplications(raw, connection),
-        rows = parseInventory(items, 'local/inventory', connection);
+      const m = parseApplications(raw, connection);
+      let rows = parseInventory(items, 'local/inventory', connection);
+      const inventoryRows = [...rows.rows],
+        seen = new Set<string>();
+      // Search must cover the namespace, not only the first transport page.
+      while (rows.nextLink) {
+        const path = continuationPath(
+          rows.nextLink,
+          'local/inventory',
+          connection,
+        );
+        if (seen.has(path)) throw Error('Invalid inventory continuation.');
+        seen.add(path);
+        rows = parseInventory(
+          await read(path, c.signal),
+          'local/inventory',
+          connection,
+        );
+        inventoryRows.push(...rows.rows);
+      }
       if (!current(id)) return;
       setModel(m);
-      setInventory(rows.rows);
-      setNext(rows.nextLink);
+      setInventory(inventoryRows);
       setConflicted(false);
       setNotice('');
       markDirty(false);
@@ -251,27 +267,6 @@ export function ApplicationsPanel({
     setDescription(a?.description ?? '');
 
     markDirty(false);
-  }
-  async function more() {
-    if (!next) return;
-    const { c, id } = start();
-    try {
-      const path = continuationPath(next, 'local/inventory', connection);
-      const rows = parseInventory(
-        await read(path, c.signal),
-        'local/inventory',
-        connection,
-      );
-      if (current(id)) {
-        setInventory((old) => [...old, ...rows.rows]);
-        setNext(rows.nextLink);
-      }
-    } catch (e) {
-      if (current(id) && !c.signal.aborted)
-        setError(e instanceof Error ? e.message : 'Cannot load resources.');
-    } finally {
-      if (current(id)) setBusy(false);
-    }
   }
   return (
     <div className="applications-layout">
@@ -617,16 +612,6 @@ export function ApplicationsPanel({
                   )
                 }
               />
-              {next && (
-                <button
-                  type="button"
-                  className="text-button"
-                  disabled={busy}
-                  onClick={() => void more()}
-                >
-                  Load more resources
-                </button>
-              )}
             </section>
           )}
         </>

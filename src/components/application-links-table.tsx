@@ -50,6 +50,10 @@ export function ApplicationLinksTable({
   ) => Promise<VaultVersion[]>;
 }) {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [keySearch, setKeySearch] = useState(''),
+    [envSearch, setEnvSearch] = useState(''),
+    [page, setPage] = useState(0),
+    [validationError, setValidationError] = useState('');
   const items = new Map<string, Row>();
   for (const item of inventory) {
     const kind = item.kind === 'secret' ? 'secrets' : 'keys';
@@ -92,6 +96,18 @@ export function ApplicationLinksTable({
     (a, b) =>
       a.purpose.localeCompare(b.purpose) || a.name.localeCompare(b.name),
   );
+  const filtered = rows.filter(
+    (row) =>
+      `${row.purpose} ${row.name}`
+        .toLowerCase()
+        .includes(keySearch.trim().toLowerCase()) &&
+      (drafts[`${row.kind}/${row.name}`]?.envName ?? row.canonical ?? '')
+        .toLowerCase()
+        .includes(envSearch.trim().toLowerCase()),
+  );
+  const pageCount = Math.max(1, Math.ceil(filtered.length / 20)),
+    currentPage = Math.min(page, pageCount - 1);
+  const visible = filtered.slice(currentPage * 20, (currentPage + 1) * 20);
   function update(row: Row, value: Partial<Draft>) {
     const id = `${row.kind}/${row.name}`,
       next = { ...(drafts[id] ?? initial(row)), ...value },
@@ -110,6 +126,21 @@ export function ApplicationLinksTable({
       className="application-links-form"
       onSubmit={async (event) => {
         event.preventDefault();
+        const invalid = Object.entries(drafts).find(
+          ([, draft]) =>
+            draft.selected && !/^[A-Z][A-Z0-9_]{0,127}$/.test(draft.envName),
+        );
+        if (invalid) {
+          const row = items.get(invalid[0]);
+          setKeySearch(row?.name ?? '');
+          setEnvSearch('');
+          setPage(0);
+          setValidationError(
+            `Enter a valid ENV variable for ${row?.purpose ?? invalid[0]}.`,
+          );
+          return;
+        }
+        setValidationError('');
         const updates = Object.entries(drafts).map(
           ([id, draft]): LinkUpdate => {
             const [kind, name] = id.split('/') as ['keys' | 'secrets', string];
@@ -143,14 +174,44 @@ export function ApplicationLinksTable({
           <thead>
             <tr>
               <th scope="col">Link</th>
-              <th scope="col">Secret / key purpose</th>
+              <th scope="col">
+                Secret / key purpose
+                <input
+                  type="search"
+                  aria-label="Search key"
+                  placeholder="Search key…"
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') event.preventDefault();
+                  }}
+                  value={keySearch}
+                  onChange={(event) => {
+                    setKeySearch(event.target.value);
+                    setPage(0);
+                  }}
+                />
+              </th>
               <th scope="col">ID</th>
               <th scope="col">Version</th>
-              <th scope="col">ENV variable</th>
+              <th scope="col">
+                ENV variable
+                <input
+                  type="search"
+                  aria-label="Search ENV"
+                  placeholder="Search ENV…"
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') event.preventDefault();
+                  }}
+                  value={envSearch}
+                  onChange={(event) => {
+                    setEnvSearch(event.target.value);
+                    setPage(0);
+                  }}
+                />
+              </th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
+            {visible.map((row) => {
               const id = `${row.kind}/${row.name}`,
                 label =
                   rows.filter((r) => r.purpose === row.purpose).length > 1
@@ -168,14 +229,43 @@ export function ApplicationLinksTable({
                 />
               );
             })}
-            {!rows.length && (
+            {!filtered.length && (
               <tr>
-                <td colSpan={5}>No secrets or keys in this namespace.</td>
+                <td colSpan={5}>
+                  {rows.length
+                    ? 'No resources match these filters.'
+                    : 'No secrets or keys in this namespace.'}
+                </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+      <nav className="application-links-pagination" aria-label="Resource pages">
+        <span role="status">
+          {filtered.length
+            ? `${currentPage * 20 + 1}–${Math.min((currentPage + 1) * 20, filtered.length)} of ${filtered.length}`
+            : '0 resources'}{' '}
+          · Page {currentPage + 1} of {pageCount}
+        </span>
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={currentPage === 0}
+          onClick={() => setPage(currentPage - 1)}
+        >
+          Previous page
+        </button>
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={currentPage >= pageCount - 1}
+          onClick={() => setPage(currentPage + 1)}
+        >
+          Next page
+        </button>
+      </nav>
+      {validationError && <p role="alert">{validationError}</p>}
       <p>
         Shared resources use the same ENV name in every application. Keys remain
         non-exportable handles.

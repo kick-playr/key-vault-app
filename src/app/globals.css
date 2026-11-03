@@ -1300,3 +1300,6 @@ main {
 
 .applications-layout .application-links-form { max-width: none; min-width: 0; }
 .application-detail { min-width: 0; }
+.application-links-table thead input[type="search"] { display: block; margin-top: 8px; min-height: 36px; font-size: .875rem; }
+.application-links-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.application-links-pagination span { margin-right: auto; color: #526174; font-size: .875rem; }

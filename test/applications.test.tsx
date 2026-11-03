@@ -872,3 +872,141 @@ test('discarding drafts by reselecting the same app resets the table and its dir
   );
   assert.equal(dirty.at(-1), false);
 });
+test('pages at twenty rows, combines key and ENV filters, and saves drafts across hidden pages', async () => {
+  const { ApplicationLinksTable } =
+    await import('../src/components/application-links-table');
+  const saved: any[] = [];
+  const inventory: any[] = Array.from({ length: 42 }, (_, i) => ({
+    kind: 'secret',
+    name: `kv-${i}`,
+    purpose: `secret-${String(i).padStart(2, '0')}`,
+    version: 'a'.repeat(32),
+    enabled: true,
+    tags: { envName: `SECRET_${i}` },
+  }));
+  render(
+    <ApplicationLinksTable
+      inventory={inventory}
+      resources={[]}
+      canonicalResources={[]}
+      disabled={false}
+      onDirty={() => {}}
+      onSave={async (updates) => {
+        saved.push(updates);
+        return true;
+      }}
+      loadVersions={async () => []}
+    />,
+  );
+  assert.equal(screen.getAllByRole('checkbox').length, 20);
+  fireEvent.click(screen.getByLabelText('Select secret-00'));
+  fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+  assert.ok(screen.getByLabelText('Select secret-20'));
+  fireEvent.click(screen.getByLabelText('Select secret-20'));
+  fireEvent.change(screen.getByLabelText('Search key'), {
+    target: { value: 'SECRET-4' },
+  });
+  assert.equal(screen.getAllByRole('checkbox').length, 2);
+  fireEvent.change(screen.getByLabelText('Search ENV'), {
+    target: { value: 'secret_41' },
+  });
+  assert.equal(screen.getAllByRole('checkbox').length, 1);
+  fireEvent.change(screen.getByLabelText('Search ENV'), {
+    target: { value: 'missing' },
+  });
+  assert.ok(screen.getByText('No resources match these filters.'));
+  fireEvent.click(screen.getByRole('button', { name: 'Save links' }));
+  await waitFor(() => assert.equal(saved.length, 1));
+  assert.equal(saved[0].length, 2);
+});
+test('filters include later namespace inventory pages, not only the first transport page', async () => {
+  const calls: string[] = [];
+  globalThis.fetch = async (input) => {
+    const path = String(input);
+    calls.push(path);
+    if (path.includes('inventory')) {
+      const payload = draftInventory();
+      if (path.includes('skiptoken')) {
+        payload.value[0].name = 'late-item';
+        payload.value[0].tags.purpose = 'late-purpose';
+        payload.value[0].id = payload.value[0].id.replace(
+          'database',
+          'late-item',
+        );
+        payload.value[0].versionId = payload.value[0].versionId.replace(
+          'database',
+          'late-item',
+        );
+        return Response.json(payload);
+      }
+      return Response.json({
+        ...payload,
+        nextLink:
+          'http://127.0.0.1:4000/namespaces/development/_shared/local/inventory?maxresults=25&%24skiptoken=abc.def',
+      });
+    }
+    return Response.json({
+      revision: 0,
+      generation: 0,
+      environment: 'development',
+      tenant: '_shared',
+      applications: [
+        {
+          name: 'club-api',
+          displayName: 'Club',
+          description: '',
+          supported: true,
+          resources: [],
+          runtimeStatus: 'not-connected',
+        },
+      ],
+    });
+  };
+  render(<ApplicationsPanel connection={connection} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Club' }));
+  fireEvent.change(screen.getByLabelText('Search key'), {
+    target: { value: 'late-purpose' },
+  });
+  assert.ok(screen.getByLabelText('Select late-purpose'));
+  assert.equal(screen.queryByLabelText('Select database'), null);
+  assert.ok(calls.some((path) => path.includes('skiptoken')));
+});
+test('invalid ENV drafts on another page cannot be submitted and are brought into view', async () => {
+  const { ApplicationLinksTable } =
+    await import('../src/components/application-links-table');
+  let writes = 0;
+  const inventory: any[] = Array.from({ length: 21 }, (_, i) => ({
+    kind: 'secret',
+    name: `kv-${i}`,
+    purpose: `purpose-${String(i).padStart(2, '0')}`,
+    version: 'a'.repeat(32),
+    enabled: true,
+  }));
+  render(
+    <ApplicationLinksTable
+      inventory={inventory}
+      resources={[]}
+      canonicalResources={[]}
+      disabled={false}
+      onDirty={() => {}}
+      onSave={async () => {
+        writes++;
+        return true;
+      }}
+      loadVersions={async () => []}
+    />,
+  );
+  fireEvent.click(screen.getByLabelText('Select purpose-00'));
+  fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save links' }));
+  assert.equal(writes, 0);
+  assert.ok(screen.getByRole('alert'));
+  assert.ok(screen.getByLabelText('ENV variable for purpose-00'));
+  const event = new dom.window.KeyboardEvent('keydown', {
+    key: 'Enter',
+    bubbles: true,
+    cancelable: true,
+  });
+  screen.getByLabelText('Search key').dispatchEvent(event);
+  assert.equal(event.defaultPrevented, true);
+});
