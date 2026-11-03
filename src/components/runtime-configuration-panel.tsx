@@ -363,7 +363,7 @@ export function RuntimeConfigurationPanel({
             {catalogError && <p role="status">{catalogError}</p>}
             {Object.entries(names).map(([slug, a]) => (
               <div key={slug}>
-                <label>
+                <label className="runtime-app-choice">
                   <input
                     type="checkbox"
                     aria-label={"Include " + a.displayName}
@@ -502,7 +502,7 @@ export function RuntimeConfigurationPanel({
                   <fieldset>
                     <legend>Assigned consumers</legend>
                     {selectedApps.map((slug) => (
-                      <label key={slug}>
+                      <label key={slug} className="runtime-app-choice">
                         <input
                           type="checkbox"
                           aria-label={`${names[slug]?.displayName ?? slug} consumes ${tenant.tenant}`}
