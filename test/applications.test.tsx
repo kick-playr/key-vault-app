@@ -1010,3 +1010,74 @@ test('invalid ENV drafts on another page cannot be submitted and are brought int
   screen.getByLabelText('Search key').dispatchEvent(event);
   assert.equal(event.defaultPrevented, true);
 });
+for (const used of [false, true])
+  test(`application deletion ${used ? 'blocks usage' : 'requires fresh usage check and explicit confirmation'}`, async () => {
+    const app = {
+      name: 'custom',
+      displayName: 'Custom app',
+      description: '',
+      supported: false,
+      liveEnabled: false,
+      resources: [],
+      runtimeStatus: 'not-connected',
+    };
+    let deleted = false;
+    const calls: string[] = [];
+    globalThis.fetch = async (input, init) => {
+      const path = String(input);
+      calls.push((init?.method ?? 'GET') + ' ' + path);
+      if (path.includes('/inventory')) return Response.json({ value: [] });
+      if (path.endsWith('/usage'))
+        return Response.json({
+          verified: true,
+          inUse: used,
+          links: used ? 1 : 0,
+          manifests: 0,
+          instances: 0,
+          pending: 0,
+        });
+      if (init?.method === 'DELETE') {
+        assert.deepEqual(JSON.parse(String(init.body)), {
+          confirmName: 'custom',
+          expectedRevision: 2,
+        });
+        deleted = true;
+      }
+      return Response.json({
+        ...connection,
+        token: undefined,
+        revision: deleted ? 3 : 2,
+        generation: 2,
+        applications: deleted ? [] : [app],
+      });
+    };
+    render(<ApplicationsPanel connection={connection} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Custom app' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Delete application' }),
+    );
+    await screen.findByRole('dialog', { name: 'Delete application' });
+    assert.equal(deleted, false);
+    assert.ok(calls.some((c) => c.endsWith('/usage')));
+    if (used) {
+      assert.ok(screen.getByText(/Application is in use/));
+      assert.equal(
+        screen.queryByRole('button', { name: 'Confirm deletion' }),
+        null,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      assert.equal(deleted, false);
+    } else {
+      const confirm = screen.getByRole('button', { name: 'Confirm deletion' });
+      assert.equal((confirm as HTMLButtonElement).disabled, true);
+      fireEvent.change(
+        screen.getByLabelText('Type application name to confirm'),
+        { target: { value: 'custom' } },
+      );
+      fireEvent.click(confirm);
+      await screen.findByText(
+        'Application deleted. Secrets and keys were kept.',
+      );
+      assert.equal(deleted, true);
+    }
+  });

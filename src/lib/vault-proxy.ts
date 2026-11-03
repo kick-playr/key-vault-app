@@ -33,8 +33,8 @@ export function supportedRoute(method: string, path: string[]) {
   if (kind === "local" && name === "applications") {
     if (path.length === 2) return method === "GET";
     if (!/^[a-z][a-z0-9-]{0,63}$/.test(version ?? "")) return false;
-    if (path.length === 3) return method === "PUT";
-    if (path.length === 4 && action === "status") return method === "GET";
+    if (path.length === 3) return ["PUT","DELETE"].includes(method);
+    if (path.length === 4 && ["status","usage"].includes(action ?? "")) return method === "GET";
     if (path.length === 4 && action === "resources") return method === "PUT";
     if (path.length === 4 && action === "activate") return method === "PUT";
     return path.length === 6 && action === "resources" &&

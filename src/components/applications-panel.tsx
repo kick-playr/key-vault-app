@@ -53,6 +53,97 @@ export function ApplicationsPanel({
   const dirty = useRef(false);
   const dirtyAreas = useRef(new Set<string>());
   const catalogToken = useRef<HTMLInputElement>(null);
+  const [deletion, setDeletion] = useState<{
+    key: string;
+    revision: number;
+    inUse: boolean;
+    verified: boolean;
+    links: number;
+    manifests: number;
+    instances: number;
+    pending: number;
+    name: string;
+  }>();
+  const deleteCancel = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!deletion) return;
+    const previous = document.activeElement as HTMLElement | null;
+    deleteCancel.current?.focus();
+    return () => {
+      if (previous?.isConnected) previous.focus();
+    };
+  }, [deletion?.key]);
+  const deletionKey = JSON.stringify([
+    connection.environment,
+    connection.tenant,
+    selected,
+  ]);
+  useEffect(
+    () => setDeletion(undefined),
+    [connection.environment, connection.tenant, connection.token, selected],
+  );
+  async function checkDeletion() {
+    if (!model || !selected) return;
+    const { c, id } = start();
+    try {
+      const usage = await read(
+        'local/applications/' + encodeURIComponent(selected) + '/usage',
+        c.signal,
+      );
+      if (!current(id)) return;
+      if (
+        typeof usage.verified !== 'boolean' ||
+        typeof usage.inUse !== 'boolean' ||
+        !['links', 'manifests', 'instances', 'pending'].every(
+          (k) => Number.isSafeInteger(usage[k]) && usage[k] >= 0,
+        )
+      )
+        throw Error('Cannot verify application usage.');
+      setDeletion({
+        key: deletionKey,
+        revision: model.revision,
+        verified: usage.verified,
+        inUse:
+          usage.inUse ||
+          usage.links + usage.manifests + usage.instances + usage.pending > 0,
+        links: usage.links,
+        manifests: usage.manifests,
+        instances: usage.instances,
+        pending: usage.pending,
+        name: '',
+      });
+    } catch (e) {
+      if (current(id) && !c.signal.aborted)
+        setError(
+          e instanceof Error ? e.message : 'Cannot verify application usage.',
+        );
+    } finally {
+      if (current(id)) setBusy(false);
+    }
+  }
+  async function confirmDeletion() {
+    if (
+      !deletion ||
+      deletion.key !== deletionKey ||
+      deletion.inUse ||
+      !deletion.verified ||
+      deletion.name !== selected ||
+      deletion.revision !== model?.revision
+    )
+      return;
+    if (
+      await mutate(
+        'local/applications/' + encodeURIComponent(selected),
+        { confirmName: selected },
+        'DELETE',
+        'delete',
+      )
+    ) {
+      setDeletion(undefined);
+      setSelected('');
+      setNotice('Application deleted. Secrets and keys were kept.');
+    }
+  }
   const [pendingAction, setPendingAction] = useState<() => void>();
   function markDirty(value: boolean, area = 'link') {
     if (value) dirtyAreas.current.add(area);
@@ -99,6 +190,10 @@ export function ApplicationsPanel({
     if (!response.ok) {
       if (response.status === 401) onUnauthorized?.();
       if (response.status === 409) setConflicted(true);
+      const problem=await response.json().catch(()=>null);
+      const code=problem?.error?.code;
+      if(code==='ApplicationInUse')throw Error('Application is now in use. Deletion is blocked. Reload and check usage again.');
+      if(code==='ApplicationUsageUnavailable')throw Error('Usage could not be verified. Deletion is blocked.');
       throw Error(errorMessage(response.status));
     }
     return response.json();
@@ -409,6 +504,97 @@ export function ApplicationsPanel({
                 <code>{selected}</code> · {connection.environment} /{' '}
                 {connection.tenant}
               </p>
+              {isShared && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={busy || conflicted}
+                  onClick={() => guarded(() => void checkDeletion())}
+                >
+                  Delete application
+                </button>
+              )}
+              {deletion?.key === deletionKey && (
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Delete application"
+                  className="azure-confirm"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setDeletion(undefined);
+                    }
+                    if (e.key === 'Tab') {
+                      const items =
+                        e.currentTarget.querySelectorAll<HTMLElement>(
+                          'button:not(:disabled),input',
+                        );
+                      const first = items[0],
+                        last = items[items.length - 1];
+                      if (e.shiftKey && document.activeElement === first) {
+                        e.preventDefault();
+                        last?.focus();
+                      } else if (
+                        !e.shiftKey &&
+                        document.activeElement === last
+                      ) {
+                        e.preventDefault();
+                        first?.focus();
+                      }
+                    }
+                  }}
+                >
+                  <h3>Delete {app?.displayName ?? selected}?</h3>
+                  {!deletion.verified ? (
+                    <p>
+                      Usage could not be fully verified. Deletion is blocked.
+                    </p>
+                  ) : deletion.inUse ? (
+                    <p>
+                      Application is in use. Deletion is blocked:{' '}
+                      {deletion.links} secret/key links, {deletion.manifests}{' '}
+                      runtime enrollments, {deletion.instances} active
+                      consumers, {deletion.pending} pending changes. Remove its
+                      usage before trying again.
+                    </p>
+                  ) : (
+                    <>
+                      <p>No usage found. Secrets and keys will be kept.</p>
+                      <label>
+                        Type application name to confirm
+                        <input
+                          value={deletion.name}
+                          onChange={(e) =>
+                            setDeletion({ ...deletion, name: e.target.value })
+                          }
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        disabled={
+                          busy ||
+                          deletion.name !== selected ||
+                          deletion.revision !== model?.revision
+                        }
+                        onClick={() => void confirmDeletion()}
+                      >
+                        Confirm deletion
+                      </button>
+                    </>
+                  )}
+                  <button
+                    ref={deleteCancel}
+                    type="button"
+                    className="secondary-button"
+                    disabled={busy}
+                    onClick={() => setDeletion(undefined)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
               <div className="application-status" role="status">
                 {runtimeStatusFailed ? (
                   <p>
