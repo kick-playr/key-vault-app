@@ -8,7 +8,7 @@ function currentHolder(){
  // Next dev preserves globals across reloads. Replace the source when bootstrap
  // configuration changes, without storing/logging the token as a cache key.
  const bootstrapKey=createHash('sha256').update(JSON.stringify([
-  process.env.NODE_ENV,process.env.SECRETS_KEYS_STRATEGY,process.env.LOCAL_KEYVAULT_URL,
+  "background-auth-v2",process.env.NODE_ENV,process.env.SECRETS_KEYS_STRATEGY,process.env.LOCAL_KEYVAULT_URL,
   process.env.LOCAL_KEYVAULT_ENVIRONMENT,process.env.LOCAL_KEYVAULT_APPLICATION_TOKEN,
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
   process.env.SECRETS_KEYS_STRATEGY==='LOCAL_KEYVAULT'?undefined:process.env.CLERK_SECRET_KEY,

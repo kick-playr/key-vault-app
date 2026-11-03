@@ -753,3 +753,10 @@ test("application details start collapsed and expand independently of selection"
  assert.equal(screen.queryByText("MONGO_URI"),null);
  assert.equal((screen.getByLabelText("Include Club API") as HTMLInputElement).checked,true);
 });
+test("configuration timeout shows a retry message instead of the raw browser error",async()=>{
+ globalThis.fetch=async()=>{throw new DOMException('signal timed out','TimeoutError');};
+ render(<RuntimeConfigurationPanel connection={connection}/>);
+ const alert=await screen.findByRole('alert');
+ assert.match(alert.textContent??'',/configuration request timed out.*retry/i);
+ assert.equal(alert.textContent?.includes('signal timed out'),false);
+});

@@ -203,7 +203,9 @@ export function RuntimeConfigurationPanel({
     } catch (e) {
       if (controller.current === owner && !owner?.signal.aborted)
         setError(
-          e instanceof Error ? e.message : "Configuration request failed.",
+          e instanceof Error && e.name === "TimeoutError"
+            ? "The configuration request timed out. Please retry; if it continues, check the Vault API connection."
+            : e instanceof Error ? e.message : "Configuration request failed.",
         );
     } finally {
       if (controller.current === owner && !owner?.signal.aborted)
