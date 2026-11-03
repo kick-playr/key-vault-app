@@ -1,0 +1,12 @@
+{
+  "name": "@kick-playr/local-key-vault",
+  "version": "0.1.10-sdk.e5f0c3",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./runtime-client": {
+      "types": "./runtime-client/index.d.cts",
+      "default": "./runtime-client/index.cjs"
+    }
+  }
+}

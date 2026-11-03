@@ -1,12 +1,9 @@
 import React from "react";
-import { SignIn } from "@clerk/nextjs";
+import {signInConfigured} from "../../../lib/server-secrets";
 import { redirect } from "next/navigation";
-export default function SignInPage() {
-  if (
-    !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ||
-    !process.env.CLERK_SECRET_KEY
-  )
-    redirect("/");
+export default async function SignInPage() {
+  if (!(await signInConfigured())) redirect("/");
+  const {SignIn}=await import("@clerk/nextjs");
   return (
     <main id="main-content" className="setup-page">
       <div>

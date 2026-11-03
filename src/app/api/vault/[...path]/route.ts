@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import {signInConfigured} from "../../../../lib/server-secrets";
 import { forwardVault } from "../../../../lib/vault-proxy";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -7,16 +7,10 @@ async function handle(
   context: { params: Promise<{ path: string[] }> },
 ) {
   const headers = { "Cache-Control": "no-store" };
-  if (
-    !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ||
-    !process.env.CLERK_SECRET_KEY
-  )
-    return Response.json(
-      { error: { code: "SignInUnavailable" } },
-      { status: 503, headers },
-    );
   let userId: string | null;
   try {
+    if (!(await signInConfigured())) throw Error();
+    const {auth}=await import("@clerk/nextjs/server");
     userId = (await auth()).userId;
   } catch {
     return Response.json(

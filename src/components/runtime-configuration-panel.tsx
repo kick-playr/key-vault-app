@@ -564,7 +564,7 @@ export function RuntimeConfigurationPanel({
                   <h3>{tenant.tenant} assignments</h3>
                   <fieldset>
                     <legend>Assigned consumers</legend>
-                    {selectedApps.map((slug) => (
+                    {selectedApps.filter((slug) => slug !== "vault-app").map((slug) => (
                       <label key={slug} className="runtime-app-choice">
                         <input
                           type="checkbox"

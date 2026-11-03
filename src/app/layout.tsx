@@ -1,28 +1,30 @@
 import React from "react";
 import type { Metadata } from "next";
-import { ClerkProvider } from "@clerk/nextjs";
+import {serverSecrets} from "../lib/server-secrets";
+export const dynamic = "force-dynamic";
 import "./globals.css";
 export const metadata: Metadata = {
   title: "Key Vault · Kick Playr",
   description: "Independent Key Vault administration for Kick Playr.",
   robots: { index: false, follow: false },
 };
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const configured =
-    !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
-    !!process.env.CLERK_SECRET_KEY;
+  const environment=await serverSecrets();
+  const configured=!!environment.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY&&!!environment.CLERK_SECRET_KEY;
+  const ClerkProvider=configured?(await import("@clerk/nextjs")).ClerkProvider:undefined;
   return (
     <html lang="en">
       <body>
         <a className="skip-link" href="#main-content">
           Skip to content
         </a>
-        {configured ? (
+        {configured && ClerkProvider ? (
           <ClerkProvider
+            publishableKey={environment.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
             signInUrl="/sign-in"
             signInFallbackRedirectUrl="/"
             afterSignOutUrl="/"
