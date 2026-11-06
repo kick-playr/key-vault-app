@@ -4,7 +4,7 @@ Standalone local vault administration for APP-45. Uses the same stack as the Kic
 
 ## Run locally
 
-Requires Node.js 24, a configured Clerk application and the existing `key-vault-api` running on loopback.
+Requires Node.js 26, a configured Clerk application and the existing `key-vault-api` running on loopback.
 
 ```sh
 npm ci
