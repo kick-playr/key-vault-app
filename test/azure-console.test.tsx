@@ -96,8 +96,8 @@ test("shows only the resource workspaces and opens history without reading value
   });
   fireEvent.click(screen.getByRole("button", { name: "Open versions" }));
   await screen.findByText("CURRENT VERSION");
-  assert.ok(screen.getByRole("button", { name: "Version v2" }));
-  assert.equal(screen.getAllByText("Disabled").length, 2);
+  assert.equal(screen.queryByRole("button", { name: "Version v2" }), null);
+  assert.equal(screen.getAllByText("Disabled").length, 1);
   assert.equal(
     calls.some((c) => c.url.endsWith("/secrets/demo")),
     false,
@@ -153,7 +153,6 @@ test("metadata editing uses exact PATCH and no secret read; new value creates a 
   });
   fireEvent.click(screen.getByRole("button", { name: "Open versions" }));
   await screen.findByText("CURRENT VERSION");
-  fireEvent.click(screen.getByRole("button", { name: "Version v2" }));
   fireEvent.click(screen.getByRole("button", { name: "Edit metadata" }));
   await screen.findByRole("button", { name: "Save metadata" });
   assert.equal(screen.queryByLabelText("Secret value"), null);

@@ -230,7 +230,7 @@ export function SecretVersionValue({
       </div>
       {!compact && (
         <label className="field">
-          Selected version secret value
+          <span className="sr-only">Selected version secret value</span>
           {value === undefined ? (
             <input
               type="password"

@@ -344,17 +344,24 @@ export function AzureVaultPanel({
     }, 300);
     return () => clearTimeout(timer);
   }, [search, mode]);
-  return (
-    <section
-      className="panel azure-panel"
-      aria-label={`${kind === "keys" ? "Keys" : "Secrets"} Azure-style workspace`}
-    >
-      {name && (
-        <p className="muted azure-breadcrumb">
-          Vault / {kind === "keys" ? "Keys" : "Secrets"} / {name}
-          {selected ? ` / ${selected.version}` : ""}
-        </p>
-      )}
+  const resourceHeading = (
+<div className={name && !mode ? "azure-resource-heading" : "azure-resource-heading-hidden"}>
+        {name && !mode && (
+          <button
+            type="button"
+            className="azure-back-button"
+            aria-label="Back to list"
+            title="Back to list"
+            onClick={() => {
+              cancelRead();
+              setName("");
+              setHistory([]);
+              setSelected(undefined);
+            }}
+          >
+            <span aria-hidden="true">&lt;</span>
+          </button>
+        )}
       <h2
         ref={heading}
         tabIndex={-1}
@@ -372,6 +379,20 @@ export function AzureVaultPanel({
             name ||
             (kind === "keys" ? "Encryption keys" : "Secrets")}
       </h2>
+      </div>
+  );
+  return (
+    <section
+      className="panel azure-panel"
+      aria-label={`${kind === "keys" ? "Keys" : "Secrets"} Azure-style workspace`}
+    >
+      {name && (
+        <p className="muted azure-breadcrumb">
+          Vault / {kind === "keys" ? "Keys" : "Secrets"} / {name}
+          {selected ? ` / ${selected.version}` : ""}
+        </p>
+      )}
+      {mode && resourceHeading}
       {notice && (
         <p role="status" className="azure-success">
           {notice}
@@ -492,16 +513,6 @@ export function AzureVaultPanel({
                     New version
                   </button>
                 )}
-                <button
-                  onClick={() => {
-                    cancelRead();
-                    setName("");
-                    setHistory([]);
-                    setSelected(undefined);
-                  }}
-                >
-                  Back to list
-                </button>
               </>
             )}
             <details className="azure-open-by-name">
@@ -530,6 +541,7 @@ export function AzureVaultPanel({
               </form>
             </details>
           </div>
+          {resourceHeading}
           {search.length > 0 && search.length < 3 && (
             <p className="muted">
               Type at least 3 characters to search by name or purpose.
@@ -538,7 +550,7 @@ export function AzureVaultPanel({
           {history.length > 0 && (
             <div className="azure-history">
               <h3>CURRENT VERSION</h3>
-              {renderVersion(history.at(-1)!)}
+              {selected?.version !== history.at(-1)!.version && renderVersion(history.at(-1)!)}
               {history.length > 1 && (
                 <>
                   <h3>OLDER VERSIONS</h3>
@@ -547,7 +559,16 @@ export function AzureVaultPanel({
               )}
               {selected && (
                 <section className="azure-version-details">
-                  <h3>Selected version {selected.version}</h3>
+                  {kind === "secrets" && (
+                    <SecretVersionValue
+                      key={`${name}/${selected.version}/${epoch.current}`}
+                      connection={connection}
+                      name={name}
+                      version={selected.version}
+                      onUnauthorized={onUnauthorized}
+                    />
+                  )}
+                  <h3>{selected.version}</h3>
                   <dl>
                     <dt>Status</dt>
                     <dd>{lifecycle(selected)}</dd>
@@ -576,15 +597,6 @@ export function AzureVaultPanel({
                         </React.Fragment>
                       ))}
                     </dl>
-                  )}
-                  {kind === "secrets" && (
-                    <SecretVersionValue
-                      key={`${name}/${selected.version}/${epoch.current}`}
-                      connection={connection}
-                      name={name}
-                      version={selected.version}
-                      onUnauthorized={onUnauthorized}
-                    />
                   )}
                   {kind === "secrets" && (
                     <button

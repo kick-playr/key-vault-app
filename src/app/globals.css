@@ -1456,3 +1456,27 @@ main {
 }
 .applications-layout .runtime-app-toggle:hover { background: #eff6ff; }
 .runtime-app-toggle svg { width: 20px; height: 20px; }
+
+.azure-resource-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.azure-resource-heading h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.azure-panel .azure-back-button {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px 10px;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.azure-resource-heading-hidden {
+  display: contents;
+}
