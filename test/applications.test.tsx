@@ -144,7 +144,7 @@ test('creates and edits apps, links an existing secret, shows canonical sharing 
     });
   };
   render(<ApplicationsPanel connection={connection} />);
-  await screen.findByText('No applications in this namespace.');
+  await screen.findByText('No global applications yet.');
   assert.equal(screen.queryByLabelText('Application slug'), null);
   fireEvent.click(screen.getByRole('button', {name:'New application'}));
   fireEvent.change(screen.getByLabelText('Application slug'), {
@@ -230,9 +230,6 @@ test('Applications is reachable from the console without replacing existing sect
   for (const name of [
     'Keys',
     'Secrets',
-    'Advanced',
-    'Keys (Azure-style)',
-    'Secrets (Azure-style)',
   ])
     assert.ok(screen.getByRole('button', { name }));
 });
@@ -427,7 +424,11 @@ test('tenant link submits separate scoped catalog credentials and clears the inp
     return Response.json(response());
   };
   render(<ApplicationsPanel connection={tenantConnection} />);
-  await screen.findByText('No applications in this namespace.');
+  assert.ok(screen.getAllByRole('heading', { name: 'Assigned applications' }).length);
+  assert.equal(screen.queryByRole('button', { name: 'New application' }), null);
+  assert.equal(screen.queryByRole('button', { name: 'Save application' }), null);
+  assert.equal(screen.queryByRole('button', { name: 'Delete application' }), null);
+  await screen.findByText('No assigned applications in this tenant.');
   fireEvent.change(screen.getByLabelText('Existing application name'), {
     target: { value: 'club-api' },
   });
@@ -547,7 +548,7 @@ test('tenant application name navigation guards an unsaved resource mapping', as
           applications: [],
         });
   render(<ApplicationsPanel connection={{ ...connection, tenant: 'club' }} />);
-  await screen.findByText('No applications in this namespace.');
+  await screen.findByText('No assigned applications in this tenant.');
   fireEvent.change(screen.getByLabelText('Existing application name'), {
     target: { value: 'club-api' },
   });

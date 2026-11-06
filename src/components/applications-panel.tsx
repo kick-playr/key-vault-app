@@ -164,6 +164,7 @@ export function ApplicationsPanel({
     sequence = useRef(0);
   const app = model?.applications.find((a) => a.name === selected);
   const isShared = connection.tenant === '_shared';
+  const applicationsLabel = isShared ? 'Applications' : 'Assigned applications';
   const headers = {
     'x-vault-token': connection.token,
     'x-vault-environment': connection.environment,
@@ -393,9 +394,9 @@ export function ApplicationsPanel({
       )}
       <section className="panel applications-toolbar">
         <div>
-          <h2>Applications</h2>
+          <h2>{applicationsLabel}</h2>
           <p>
-            Model applications and their resource links in{' '}
+            {isShared ? 'Manage global application definitions and shared resource links in' : 'Manage resource links for applications assigned to'}{' '}
             <strong>
               {connection.environment} / {connection.tenant}
             </strong>
@@ -422,8 +423,8 @@ export function ApplicationsPanel({
           <section className="panel applications-catalog">
             <div className="applications-catalog-heading">
               <div>
-                <h2>Application list</h2>
-                <p>Select an application to manage its details and secret links.</p>
+                <h2>{isShared ? 'Application list' : 'Assigned applications'}</h2>
+                <p>{isShared ? 'Select an application to manage its global details and shared resource links.' : 'Select an assigned application to manage its resource links in this tenant. Global definitions are managed in _shared.'}</p>
               </div>
               {isShared && <button type="button" className="primary-button"
                 disabled={busy || conflicted} aria-expanded={showCreate} aria-controls="application-create-form"
@@ -431,9 +432,9 @@ export function ApplicationsPanel({
                 New application
               </button>}
             </div>
-            {!model.applications.length ? <p>No applications in this namespace.</p> : (
+            {!model.applications.length ? <p>{isShared ? 'No global applications yet.' : 'No assigned applications in this tenant.'}</p> : (
               <div className="applications-catalog-scroll">
-                <table className="applications-catalog-table" aria-label="Applications">
+                <table className="applications-catalog-table" aria-label={applicationsLabel}>
                   <thead><tr><th scope="col">Application</th><th scope="col">Slug</th><th scope="col">Description</th><th scope="col">Linked resources</th></tr></thead>
                   <tbody>{model.applications.map(a => (
                     <tr key={a.name} className={selected === a.name ? 'is-selected' : ''}>

@@ -4,7 +4,6 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   KeyIcon,
   LockClosedIcon,
-  CommandLineIcon,
   ShieldCheckIcon,
   ArrowRightOnRectangleIcon,
   EyeIcon,
@@ -47,8 +46,8 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
   const [connecting, setConnecting] = useState(false);
   const [connection, setConnection] = useState<Connection | null>(null);
   const [section, setSection] = useState<Section>("keys");
-  const [applicationsOpen, setApplicationsOpen] = useState(false);
-  const [runtimeOpen, setRuntimeOpen] = useState(false);
+  const [applicationsOpen, setApplicationsOpen] = useState(true);
+  const [runtimeOpen, setRuntimeOpen] = useState(true);
   const [azureKind, setAzureKind] = useState<"keys" | "secrets" | null>(null);
   const [pendingNavigation, setPendingNavigation] = useState<() => void>();
   const dirtyInput = useRef(false);
@@ -313,17 +312,14 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
             }
           >
             <Square2StackIcon />
-            Applications
+            {connection && connection.tenant !== "_shared" ? "Assigned applications" : "Applications"}
           </button>
           {(
             [
-              { id: "keys", label: "Keys", Icon: KeyIcon },
-              { id: "secrets", label: "Secrets", Icon: LockClosedIcon },
-              { id: "advanced", label: "Advanced", Icon: CommandLineIcon },
-              { id: "keys-azure", label: "Keys (Azure-style)", Icon: KeyIcon },
+              { id: "keys-azure", label: "Keys", Icon: KeyIcon },
               {
                 id: "secrets-azure",
-                label: "Secrets (Azure-style)",
+                label: "Secrets",
                 Icon: LockClosedIcon,
               },
             ] as const
@@ -332,14 +328,12 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
               key={id}
               className={
                 "nav-item " +
-                (!applicationsOpen &&
-                (azureKind ? `${azureKind}-azure` === id : section === id)
+                (!applicationsOpen && `${azureKind}-azure` === id
                   ? "active"
                   : "")
               }
               aria-current={
-                !applicationsOpen &&
-                (azureKind ? `${azureKind}-azure` === id : section === id)
+                !applicationsOpen && `${azureKind}-azure` === id
                   ? "page"
                   : undefined
               }
@@ -398,9 +392,13 @@ export function VaultConsole({ account }: { account?: React.ReactNode }) {
               {applicationsOpen
                 ? runtimeOpen
                   ? "Runtime configuration"
-                  : "Applications"
+                  : connection && connection.tenant !== "_shared"
+                    ? "Assigned applications"
+                    : "Applications"
                 : azureKind
-                  ? `${azureKind === "keys" ? "Keys" : "Secrets"} (Azure-style)`
+                  ? azureKind === "keys"
+                    ? "Keys"
+                    : "Secrets"
                   : section === "keys"
                     ? "Keys"
                     : section === "secrets"

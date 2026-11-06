@@ -69,7 +69,7 @@ async function connect() {
 async function secrets() {
   await connect();
   fireEvent.click(
-    screen.getByRole("button", { name: "Secrets (Azure-style)" }),
+    screen.getByRole("button", { name: "Secrets" }),
   );
   await screen.findByRole("button", { name: "Generate/Import" });
 }
@@ -78,17 +78,18 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
   calls = [];
 });
-test("adds two sections without removing fallback and opens history without reading values", async () => {
+test("shows only the resource workspaces and opens history without reading values", async () => {
   setup();
   await secrets();
   for (const name of [
     "Keys",
     "Secrets",
-    "Advanced",
-    "Keys (Azure-style)",
-    "Secrets (Azure-style)",
   ])
     assert.ok(screen.getByRole("button", { name }));
+  assert.equal(screen.queryByRole("button", { name: "Advanced" }), null);
+  assert.equal(screen.queryByRole("button", { name: /Azure-style/ }), null);
+  assert.equal(screen.getAllByRole("button", { name: "Keys" }).length, 1);
+  assert.equal(screen.getAllByRole("button", { name: "Secrets" }).length, 1);
   fireEvent.click(screen.getByText("Open by name…").closest("summary")!);
   fireEvent.change(screen.getByLabelText("Open by name"), {
     target: { value: "demo" },
@@ -183,7 +184,7 @@ test("generates only supported RSA key options", async () => {
       : Response.json({ value: [] }),
   );
   await connect();
-  fireEvent.click(screen.getByRole("button", { name: "Keys (Azure-style)" }));
+  fireEvent.click(screen.getByRole("button", { name: "Keys" }));
   fireEvent.click(await screen.findByRole("button", { name: "Generate key" }));
   fireEvent.change(screen.getByLabelText("Name"), {
     target: { value: "demo" },
@@ -216,7 +217,7 @@ test("dirty forms can stay or discard before switching sections", async () => {
   );
   fireEvent.click(screen.getByRole("button", { name: "Keys" }));
   fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
-  assert.ok(await screen.findByLabelText("Resource name"));
+  assert.ok(await screen.findByRole("button", { name: "Generate key" }));
 });
 test("ambiguous write keeps form and never automatically retries", async () => {
   setup(async (url, init) => {
@@ -477,7 +478,7 @@ test("discarding through the current section resets its sensitive form too", asy
     target: { value: "discard-me" },
   });
   fireEvent.click(
-    screen.getByRole("button", { name: "Secrets (Azure-style)" }),
+    screen.getByRole("button", { name: "Secrets" }),
   );
   fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
   assert.equal(
