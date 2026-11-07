@@ -24,3 +24,8 @@ test('legacy console ENV stays compatible',async()=>{const source=createConsoleS
 test('refresh warning blocks cached credentials immediately',async()=>{
  let state='applied';const source=createConsoleSecretsSource(environment,()=>({start:async()=>{},refresh:async()=>{state='warning';},status:()=>({state}),withValue:async(fn:any)=>fn(keys()),close(){}}));await source.load();await assert.rejects(source.refresh(),/Vault console authentication unavailable/);await assert.rejects(source.load(),/Vault console authentication unavailable/);source.close();
 });
+
+test('v2 bootstrap waits for its own app secrets and reads memory on later calls', async () => {
+ let calls=0;const source=createConsoleSecretsSource({VAULT_APPLICATION_ID:'vault-app'},undefined,{bootstrapFactory:()=>({load:async()=>{calls++;return{CLERK_SECRET_KEY:'sk_test_memory',CLERK_ENCRYPTION_KEY:Buffer.alloc(32,7).toString('base64')}},refresh:async()=>{},status:()=>({state:'applied',ready:true}),close:()=>{}})});
+ assert.equal((await source.load()).CLERK_SECRET_KEY,'sk_test_memory');assert.equal((await source.load()).CLERK_SECRET_KEY,'sk_test_memory');assert.equal(calls,2);source.close();
+});

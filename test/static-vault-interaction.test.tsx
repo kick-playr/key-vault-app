@@ -1,0 +1,28 @@
+import {test,afterEach} from 'node:test';
+import assert from 'node:assert/strict';
+import React from 'react';
+import {JSDOM} from 'jsdom';
+const dom=new JSDOM('<!doctype html><html><body></body></html>',{url:'http://localhost:4001'});
+Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,HTMLInputElement:dom.window.HTMLInputElement,MutationObserver:dom.window.MutationObserver,IS_REACT_ACT_ENVIRONMENT:true});
+const {render,screen,fireEvent,cleanup,waitFor}=await import('@testing-library/react');
+const {StaticResourceTable}=await import('../src/components/static-vault-console');
+afterEach(cleanup);
+const resources=Array.from({length:25},(_,i)=>({_id:`id-${i}`,name:`Purpose ${i}`,kind:'secret',currentVersionId:'v1',currentVersionNumber:1,revision:1}));
+test('selection survives paging, filters use purpose and ENV, and save keeps off-page links',async()=>{
+ let saved:unknown;
+ render(<StaticResourceTable resources={resources} links={[{resourceId:'id-24',accessName:'OFF_PAGE',versionPolicy:'latest'}]} onSave={async rows=>{saved=rows}}/>);
+ assert.equal(screen.queryByText('Purpose 24'),null);
+ assert.equal(screen.getAllByRole('checkbox').length,20);
+ fireEvent.click(screen.getByRole('button',{name:'Next'}));
+ assert.ok(screen.getByText('Purpose 24'));
+ fireEvent.click(screen.getByRole('button',{name:'Previous'}));
+ fireEvent.click(screen.getByLabelText('Link Purpose 0'));
+ fireEvent.change(screen.getByLabelText('ENV Purpose 0'),{target:{value:'CLERK_SECRET_KEY'}});
+ fireEvent.click(screen.getByRole('button',{name:'Save links'}));
+ await waitFor(()=>assert.deepEqual(saved,[{resourceId:'id-24',accessName:'OFF_PAGE',versionPolicy:'latest'},{resourceId:'id-0',accessName:'CLERK_SECRET_KEY',versionPolicy:'latest'}]));
+ fireEvent.click(screen.getByRole('button',{name:'Linked'}));
+ assert.equal(screen.getAllByRole('checkbox').length,2);
+ fireEvent.change(screen.getByLabelText('Filter by ENV'),{target:{value:'OFF_PAGE'}});
+ assert.equal(screen.getAllByRole('checkbox').length,1);
+ assert.ok(screen.getByText('Purpose 24'));
+});

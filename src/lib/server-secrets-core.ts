@@ -11,81 +11,200 @@ const MAX_VERIFIED_AGE_MS = 5000;
 export function createConsoleSecretsSource(
   input: Record<string, string | undefined>,
   factory?: () => Live | Promise<Live>,
-  options: { now?: () => number } = {},
+  options: {
+    now?: () => number;
+    bootstrapFactory?: () => {
+      load(): Promise<Readonly<Record<string, string>>>;
+      refresh(): Promise<void>;
+      status(): { state: string; ready: boolean };
+      close(): void;
+    };
+  } = {},
 ) {
-  const environment = { ...input }, now = options.now ?? (() => performance.now());
+  const environment = { ...input },
+    now = options.now ?? (() => performance.now());
+  if (input.VAULT_APPLICATION_ID) {
+    if (input.VAULT_APPLICATION_ID !== "vault-app") throw unavailable();
+    let source:
+        ReturnType<NonNullable<typeof options.bootstrapFactory>> | undefined,
+      pending:
+        | Promise<ReturnType<NonNullable<typeof options.bootstrapFactory>>>
+        | undefined;
+    const open = () =>
+      (pending ??= Promise.resolve().then(
+        async () =>
+          (source = options.bootstrapFactory
+            ? options.bootstrapFactory()
+            : (
+                await import("@kick-playr/local-key-vault/runtime-client/server-bootstrap")
+              ).createServerBootstrap(input, "vault-app", {
+                requiredMappings: [
+                  "CLERK_SECRET_KEY",
+                  "CLERK_ENCRYPTION_KEY",
+                  "CLERK_PUBLISHABLE_KEY",
+                ],
+              })),
+      ));
+    return {
+      load: async (): Promise<SecretEnvironment> =>
+        (async () => {
+          const values = await (await open()).load();
+          return Object.freeze({
+            ...Object.fromEntries(
+              Object.entries(input).filter(([name]) =>
+                [
+                  "NODE_ENV",
+                  "NEXT_RUNTIME",
+                  "VAULT_APPLICATION_ID",
+                  "VAULT_ENVIRONMENT",
+                  "VAULT_URL",
+                ].includes(name),
+              ),
+            ),
+            SECRETS_KEYS_STRATEGY: "LOCAL_KEYVAULT",
+            ...values,
+            NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: values.CLERK_PUBLISHABLE_KEY,
+          });
+        })(),
+      refresh: async () => {
+        await (await open()).refresh();
+      },
+      close: () => source?.close(),
+    };
+  }
+
   let pending: Promise<Live> | undefined, live: Live | undefined;
   let refreshing: Promise<void> | undefined, verifiedAt: number | undefined;
-  let timer: ReturnType<typeof setTimeout> | undefined, closed = false;
+  let timer: ReturnType<typeof setTimeout> | undefined,
+    closed = false;
   const validate = (values: Record<string, string>) => {
-    if (!/^sk_(test|live)_[A-Za-z0-9_-]+$/.test(values.CLERK_SECRET_KEY ?? "")) throw unavailable();
+    if (!/^sk_(test|live)_[A-Za-z0-9_-]+$/.test(values.CLERK_SECRET_KEY ?? ""))
+      throw unavailable();
     const key = values.CLERK_ENCRYPTION_KEY ?? "";
-    if (!/^[A-Za-z0-9+/]{43}=$/.test(key) || Buffer.from(key, "base64").length !== 32) throw unavailable();
-    return { CLERK_SECRET_KEY: values.CLERK_SECRET_KEY!, CLERK_ENCRYPTION_KEY: key };
+    if (
+      !/^[A-Za-z0-9+/]{43}=$/.test(key) ||
+      Buffer.from(key, "base64").length !== 32
+    )
+      throw unavailable();
+    return {
+      CLERK_SECRET_KEY: values.CLERK_SECRET_KEY!,
+      CLERK_ENCRYPTION_KEY: key,
+    };
   };
   async function construct(): Promise<Live> {
     if (factory) return factory();
-    const { createApplicationRuntime } = await import("@kick-playr/local-key-vault/runtime-client");
+    const { createApplicationRuntime } =
+      await import("@kick-playr/local-key-vault/runtime-client");
     return createApplicationRuntime({
       application: "vault-app",
-      scope: { environment: environment.LOCAL_KEYVAULT_ENVIRONMENT ?? "development", tenant: "_shared" },
+      scope: {
+        environment: environment.LOCAL_KEYVAULT_ENVIRONMENT ?? "development",
+        tenant: "_shared",
+      },
       environment,
       allowedMappings: ["CLERK_SECRET_KEY", "CLERK_ENCRYPTION_KEY"],
       requiredMappings: ["CLERK_SECRET_KEY", "CLERK_ENCRYPTION_KEY"],
       intervalMs: 5000,
-      prepare: snapshot => ({ value: validate(Object.fromEntries(snapshot.resources.map(r => [r.mapping, r.value]))) }),
+      prepare: (snapshot) => ({
+        value: validate(
+          Object.fromEntries(
+            snapshot.resources.map((r) => [r.mapping, r.value]),
+          ),
+        ),
+      }),
     });
   }
   function schedule() {
     if (closed || timer) return;
-    timer = setTimeout(() => { timer = undefined; void refresh().catch(() => {}); }, 1000);
+    timer = setTimeout(() => {
+      timer = undefined;
+      void refresh().catch(() => {});
+    }, 1000);
     timer.unref?.();
   }
   async function initialize() {
     if (closed) throw unavailable();
-    return pending ??= construct().then(async runtime => {
-      live = runtime;
-      if (closed) { runtime.close(); throw unavailable(); }
-      await runtime.start();
-      if (runtime.status().state !== "applied") throw unavailable();
-      verifiedAt = now();
-      schedule();
-      return runtime;
-    }).catch(() => {
-      live?.close(); live = undefined; pending = undefined; verifiedAt = undefined;
-      throw unavailable();
-    });
+    return (pending ??= construct()
+      .then(async (runtime) => {
+        live = runtime;
+        if (closed) {
+          runtime.close();
+          throw unavailable();
+        }
+        await runtime.start();
+        if (runtime.status().state !== "applied") throw unavailable();
+        verifiedAt = now();
+        schedule();
+        return runtime;
+      })
+      .catch(() => {
+        live?.close();
+        live = undefined;
+        pending = undefined;
+        verifiedAt = undefined;
+        throw unavailable();
+      }));
   }
   async function refresh() {
     try {
       const runtime = await initialize();
-      if (timer) { clearTimeout(timer); timer = undefined; }
+      if (timer) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
       return await (refreshing ??= (async () => {
         await runtime.refresh();
         if (runtime.status().state !== "applied") throw unavailable();
         verifiedAt = now();
-      })().catch(() => { verifiedAt = undefined; throw unavailable(); }).finally(() => {
-        refreshing = undefined; schedule();
-      }));
-    } catch { throw unavailable(); }
+      })()
+        .catch(() => {
+          verifiedAt = undefined;
+          throw unavailable();
+        })
+        .finally(() => {
+          refreshing = undefined;
+          schedule();
+        }));
+    } catch {
+      throw unavailable();
+    }
   }
   return {
     async load(): Promise<SecretEnvironment> {
       try {
         if (closed) throw unavailable();
         const strategy = environment.SECRETS_KEYS_STRATEGY ?? "ENV_VARIABLES";
-        if (strategy === "ENV_VARIABLES") return Object.freeze({ ...environment });
-        if (strategy !== "LOCAL_KEYVAULT" || !["development", "test"].includes(environment.NODE_ENV ?? "") ||
-          environment.VERCEL !== undefined || environment.AWS_LAMBDA_FUNCTION_NAME !== undefined ||
-          ["production", "PROD"].includes(environment.STAGE ?? "")) throw unavailable();
+        if (strategy === "ENV_VARIABLES")
+          return Object.freeze({ ...environment });
+        if (
+          strategy !== "LOCAL_KEYVAULT" ||
+          !["development", "test"].includes(environment.NODE_ENV ?? "") ||
+          environment.VERCEL !== undefined ||
+          environment.AWS_LAMBDA_FUNCTION_NAME !== undefined ||
+          ["production", "PROD"].includes(environment.STAGE ?? "")
+        )
+          throw unavailable();
         const runtime = await initialize();
         // Network I/O belongs to the background monitor, not every Clerk request.
         // Revocation/warnings block immediately; an unverified snapshot expires.
-        if (runtime.status().state !== "applied" || verifiedAt === undefined || now() - verifiedAt > MAX_VERIFIED_AGE_MS) throw unavailable();
-        return await runtime.withValue(values => Object.freeze({ ...environment, ...validate(values) }));
-      } catch { throw unavailable(); }
+        if (
+          runtime.status().state !== "applied" ||
+          verifiedAt === undefined ||
+          now() - verifiedAt > MAX_VERIFIED_AGE_MS
+        )
+          throw unavailable();
+        return await runtime.withValue((values) =>
+          Object.freeze({ ...environment, ...validate(values) }),
+        );
+      } catch {
+        throw unavailable();
+      }
     },
     refresh,
-    close() { closed = true; if (timer) clearTimeout(timer); live?.close(); },
+    close() {
+      closed = true;
+      if (timer) clearTimeout(timer);
+      live?.close();
+    },
   };
 }
